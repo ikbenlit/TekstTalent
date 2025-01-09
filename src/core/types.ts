@@ -12,7 +12,7 @@ export interface SpeechRecognitionResultList {
 }
 
 export interface SpeechRecognitionErrorEvent {
-  error: string;
+  error: 'no-speech' | 'aborted' | 'network' | 'not-allowed' | 'service-not-allowed';
   message?: string;
 }
 

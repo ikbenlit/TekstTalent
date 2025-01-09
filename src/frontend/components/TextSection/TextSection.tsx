@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { TransformFormat } from '@/core/types';
 import { TransformControls } from '../TransformControls/TransformControls';
 import { CopyButton } from '../CopyButton/CopyButton';
@@ -29,6 +29,14 @@ export const TextSection: React.FC<TextSectionProps> = ({
   onGenerateImage,
   isGeneratingImage,
 }) => {
+  const [lastTransformedText, setLastTransformedText] = useState('');
+
+  useEffect(() => {
+    if (transformedText) {
+      setLastTransformedText(transformedText);
+    }
+  }, [transformedText]);
+
   return (
     <div className="space-y-4">
       <div className="relative">
@@ -92,7 +100,7 @@ export const TextSection: React.FC<TextSectionProps> = ({
 
       <div className="relative">
         <textarea
-          value={transformedText}
+          value={transformedText || lastTransformedText}
           onChange={(e) => onTransformedTextChange(e.target.value)}
           className={`w-full h-48 md:h-56 p-4 pb-12 border border-gray-200 rounded-lg 
             focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500] resize-none
@@ -101,7 +109,7 @@ export const TextSection: React.FC<TextSectionProps> = ({
           disabled={isTransforming}
         />
         <div className="absolute bottom-3 right-3">
-          <CopyButton text={transformedText} />
+          <CopyButton text={transformedText || lastTransformedText} />
         </div>
         {isTransforming && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
