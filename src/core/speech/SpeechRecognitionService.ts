@@ -1,97 +1,68 @@
 import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionOptions } from '../types';
 
 export class SpeechRecognitionService {
-  private recognition: SpeechRecognition;
-  private isListening: boolean = false;
-  private onResultCallback?: (text: string) => void;
+  private recognition: SpeechRecognition | null = null;
+  private isInitialized = false;
 
-  constructor(options: SpeechRecognitionOptions = {}) {
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  constructor() {
+    try {
+      // Check voor verschillende browser implementaties
+      const SpeechRecognition = window.SpeechRecognition || 
+                               (window as any).webkitSpeechRecognition ||
+                               (window as any).mozSpeechRecognition ||
+                               (window as any).msSpeechRecognition;
 
-    if (!SpeechRecognitionAPI) {
-      throw new Error('Speech Recognition API is not supported in your browser');
+      if (!SpeechRecognition) {
+        throw new Error('Speech Recognition niet ondersteund in deze browser');
+      }
+
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'nl-NL';
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('Speech Recognition initialisatie mislukt:', error);
     }
-
-    this.recognition = new SpeechRecognitionAPI() as unknown as SpeechRecognition;
-    
-    // Configure recognition
-    (this.recognition as unknown as { continuous: boolean }).continuous = true;
-    (this.recognition as unknown as { interimResults: boolean }).interimResults = true;
-    (this.recognition as unknown as { lang: string }).lang = options.language ?? 'nl-NL';
-
-    // Setup event handlers
-    this.setupEventHandlers();
   }
 
-  public startListening(onResult: (text: string) => void): void {
-    if (this.isListening) {
-      console.warn('Speech recognition is already active');
+  public start(onResult: (text: string) => void, onError?: (error: any) => void): void {
+    if (!this.isInitialized || !this.recognition) {
+      onError?.('Speech Recognition niet beschikbaar');
       return;
     }
 
-    this.isListening = true;
-    this.onResultCallback = onResult;
     try {
-      (this.recognition as unknown as { start: () => void }).start();
+      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const result = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join(' ');
+        onResult(result);
+      };
+
+      this.recognition.onerror = (event) => {
+        console.warn('Speech Recognition error:', event.error);
+        onError?.(event.error);
+      };
+
+      this.recognition.start();
     } catch (error) {
-      this.handleError(error as Error);
+      console.error('Speech Recognition start mislukt:', error);
+      onError?.(error);
     }
   }
 
-  public stopListening(): void {
-    if (!this.isListening) return;
-    try {
-      (this.recognition as unknown as { stop: () => void }).stop();
-      this.cleanup();
-    } catch (error) {
-      this.handleError(error as Error);
-    }
-  }
-
-  private setupEventHandlers(): void {
-    // Result handler
-    (this.recognition as unknown as { onresult: (event: SpeechRecognitionEvent) => void }).onresult = (event: SpeechRecognitionEvent) => {
-      if (!this.onResultCallback) return;
-
-      const transcript = Array.from(event.results as unknown as ArrayLike<{ [index: number]: { transcript: string }; isFinal: boolean }>)
-        .map(result => result[0].transcript)
-        .join(' ');
-
-      this.onResultCallback(transcript);
-    };
-    // End handler
-    (this.recognition as unknown as { onend: () => void }).onend = () => {
-      if (this.isListening) {
-        // Als we nog luisteren, start opnieuw
-        try {
-          (this.recognition as unknown as { start: () => void }).start();
-        } catch (error) {
-          this.handleError(error as Error);
-        }
-      } else {
-        // Anders cleanup
-        this.cleanup();
+  public stop(): void {
+    if (this.recognition) {
+      try {
+        this.recognition.stop();
+      } catch (error) {
+        console.error('Speech Recognition stop mislukt:', error);
       }
-    };
-    // Error handler
-    (this.recognition as unknown as { onerror: (event: Event) => void }).onerror = (event: Event) => {
-      const error = event as unknown as { error: string; message: string };
-      this.handleError(new Error(error.message || 'Speech recognition error'));
-    };
+    }
   }
 
-  private handleError(error: Error): void {
-    console.error('Speech Recognition Error:', error);
-    this.cleanup();
-    throw error;
-  }
-
-  private cleanup(): void {
-    this.isListening = false;
-    this.onResultCallback = undefined;
-  }
-
-  public isActive(): boolean {
-    return this.isListening;
+  public isSupported(): boolean {
+    return this.isInitialized;
   }
 } 

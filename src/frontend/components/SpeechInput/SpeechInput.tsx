@@ -15,50 +15,41 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({ onTextChange }) => {
   const [speechService, setSpeechService] = useState<SpeechRecognitionService | null>(null);
 
   useEffect(() => {
-    try {
-      setSpeechService(new SpeechRecognitionService());
-    } catch (e) {
-      setError((e as Error).message);
+    const service = new SpeechRecognitionService();
+    setSpeechService(service);
+    
+    if (!service.isSupported()) {
+      setError('Speech herkenning wordt niet ondersteund in deze browser');
     }
   }, []);
 
-  const handleStartListening = useCallback(() => {
+  const toggleListening = () => {
     if (!speechService) return;
-    console.log('Starting recording...');
-    setIsListening(true);
-    speechService.startListening((text) => {
-      onTextChange(text);
-    });
-  }, [speechService, onTextChange]);
 
-  const handleStopListening = useCallback(() => {
-    if (!speechService) return;
-    setIsListening(false);
-    speechService.stopListening();
-  }, [speechService]);
-
-  if (error) {
-    return (
-      <div className="rounded-lg p-4 border border-[#FF4500] bg-red-50">
-        <div className="flex items-center gap-2 text-[#FF4500]">
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('isListening:', isListening);
+    if (isListening) {
+      speechService.stop();
+      setIsListening(false);
+    } else {
+      speechService.start(
+        (text) => onTextChange(text),
+        (error) => {
+          setError(error);
+          setIsListening(false);
+        }
+      );
+      setIsListening(true);
+      setError(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-2">
+      {error && (
+        <p className="text-red-500 text-sm mb-2">{error}</p>
+      )}
       <div className="relative">
-        {isListening && (
-          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-32 h-6">
-            <VolumeIndicator isListening={isListening} />
-          </div>
-        )}
         <button
-          onClick={isListening ? handleStopListening : handleStartListening}
+          onClick={toggleListening}
           className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all duration-200
             ${isListening 
               ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
