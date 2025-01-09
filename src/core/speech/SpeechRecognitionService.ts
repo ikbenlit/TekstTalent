@@ -3,10 +3,10 @@ import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionConstr
 export class SpeechRecognitionService {
   private recognition: SpeechRecognition | null = null;
   private isInitialized = false;
+  private lastResult = '';
 
   constructor() {
     try {
-      // Check voor verschillende browser implementaties
       const SpeechRecognitionImpl = (
         window.SpeechRecognition ||
         window.webkitSpeechRecognition ||
@@ -18,8 +18,8 @@ export class SpeechRecognitionService {
       }
 
       this.recognition = new SpeechRecognitionImpl();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
+      this.recognition.continuous = false;
+      this.recognition.interimResults = false;
       this.recognition.lang = 'nl-NL';
       this.isInitialized = true;
     } catch (error) {
@@ -34,11 +34,22 @@ export class SpeechRecognitionService {
     }
 
     try {
+      this.lastResult = '';
+
       this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const result = Array.from(event.results)
-          .map(result => result[0].transcript)
-          .join(' ');
-        onResult(result);
+        if (event.results.length > 0) {
+          const transcript = event.results[0][0].transcript;
+          if (transcript !== this.lastResult) {
+            this.lastResult = transcript;
+            onResult(transcript);
+          }
+        }
+      };
+
+      this.recognition.onend = () => {
+        if (this.isInitialized) {
+          this.recognition?.start();
+        }
       };
 
       this.recognition.onerror = (event) => {

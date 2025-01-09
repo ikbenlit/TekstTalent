@@ -44,13 +44,24 @@ export const TextSection: React.FC<TextSectionProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-        <TransformControls
-          format={format}
-          onFormatChange={onFormatChange}
-          onTransform={onTransform}
+      <div className="flex flex-col md:flex-row gap-4">
+        <select
+          value={format}
+          onChange={(e) => onFormatChange(e.target.value as TransformFormat)}
+          className="flex-1 px-4 py-2 border border-gray-200 rounded-lg 
+            focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500]"
+        >
+          <option value="business-letter">Zakelijke brief</option>
+          <option value="social-post">Social media bericht</option>
+          <option value="email">E-mail</option>
+        </select>
+        
+        <button 
+          onClick={onTransform}
           disabled={!text || isTransforming}
-          className="flex-1"
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 
+            bg-[#FF4500] text-white rounded-lg hover:bg-[#FF5722] 
+            disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isTransforming ? (
             <>
@@ -63,17 +74,6 @@ export const TextSection: React.FC<TextSectionProps> = ({
               Transformeer
             </>
           )}
-        </TransformControls>
-        
-        <button
-          onClick={onGenerateImage}
-          disabled={!text || isTransforming || isGeneratingImage}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 
-            text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
-        >
-          <Image className="w-4 h-4" />
-          <span className="hidden sm:inline">Genereer Afbeelding</span>
-          <span className="sm:hidden">Afbeelding</span>
         </button>
       </div>
 
@@ -100,6 +100,17 @@ export const TextSection: React.FC<TextSectionProps> = ({
           </div>
         )}
       </div>
+
+      <button
+        onClick={onGenerateImage}
+        disabled={!text || isTransforming || isGeneratingImage}
+        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2
+          bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg 
+          hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Image className="w-4 h-4" />
+        <span>Genereer Afbeelding</span>
+      </button>
     </div>
   );
 }; 
