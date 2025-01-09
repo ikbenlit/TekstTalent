@@ -72,8 +72,8 @@ export default function Home() {
 
   return (
     <Layout>
-      <div className="space-y-4 md:space-y-8">
-        <div className="flex flex-col items-center gap-4">
+      <div className="space-y-4">
+        <div className="flex flex-col items-center gap-4 mb-4">
           <SpeechInput onTextChange={setText} />
         </div>
 
@@ -84,15 +84,18 @@ export default function Home() {
             transformedText={transformedText}
             onTransformedTextChange={setTransformedText}
             onTransform={handleTransform}
-            onGenerateImage={handleGenerateImage}
             isTransforming={isTransforming}
-            isGeneratingImage={isGeneratingImage}
             format={format}
             onFormatChange={setFormat}
+            onGenerateImage={handleGenerateImage}
+            isGeneratingImage={isGeneratingImage}
           />
           <ImageSection 
             imageUrl={imageUrl} 
             isGeneratingImage={isGeneratingImage}
+            onGenerateImage={handleGenerateImage}
+            text={text}
+            isTransforming={isTransforming}
           />
         </div>
       </div>

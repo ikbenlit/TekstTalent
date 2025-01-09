@@ -1,4 +1,21 @@
 // Speech Recognition types
+export interface SpeechRecognitionResult {
+  [index: number]: {
+    transcript: string;
+  };
+  isFinal: boolean;
+}
+
+export interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult;
+  length: number;
+}
+
+export interface SpeechRecognitionErrorEvent {
+  error: string;
+  message?: string;
+}
+
 export interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
 }
@@ -8,8 +25,11 @@ export interface SpeechRecognition extends EventTarget {
   interimResults: boolean;
   lang: string;
   onresult: (event: SpeechRecognitionEvent) => void;
-  onerror: (event: any) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
   onend: () => void;
+  onstart: () => void;
+  onaudiostart: () => void;
+  onspeechstart: () => void;
   start: () => void;
   stop: () => void;
 }

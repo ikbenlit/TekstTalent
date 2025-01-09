@@ -1,9 +1,17 @@
-import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionConstructor } from '../types';
+import type { 
+  SpeechRecognition, 
+  SpeechRecognitionEvent, 
+  SpeechRecognitionConstructor,
+  SpeechRecognitionErrorEvent
+} from '../types';
 
 export class SpeechRecognitionService {
+  private readonly MAX_RESTART_ATTEMPTS = 3;
   private recognition: SpeechRecognition | null = null;
   private isInitialized = false;
-  private lastResult = '';
+  private isListening = false;
+  private restartAttempts = 0;
+  private isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   constructor() {
     try {
@@ -18,8 +26,8 @@ export class SpeechRecognitionService {
       }
 
       this.recognition = new SpeechRecognitionImpl();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.continuous = !this.isMobile;
+      this.recognition.interimResults = !this.isMobile;
       this.recognition.lang = 'nl-NL';
       this.isInitialized = true;
     } catch (error) {
@@ -27,50 +35,101 @@ export class SpeechRecognitionService {
     }
   }
 
-  public start(onResult: (text: string) => void, onError?: (error: any) => void): void {
+  public start(onResult: (text: string) => void, onError?: (error: string) => void): void {
     if (!this.isInitialized || !this.recognition) {
-      onError?.('Speech Recognition niet beschikbaar');
+      onError?.('Speech Recognition niet ondersteund in deze browser');
       return;
     }
 
     try {
-      this.lastResult = '';
+      this.restartAttempts = 0;
+      this.isListening = true;
+      this.resetHandlers();
 
-      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+      this.recognition.onresult = (event: SpeechRecognitionEvent): void => {
         if (event.results.length > 0) {
-          const transcript = event.results[0][0].transcript;
-          if (transcript !== this.lastResult) {
-            this.lastResult = transcript;
+          const result = event.results[event.results.length - 1];
+          if (result.isFinal || this.isMobile) {
+            const transcript = result[0].transcript;
             onResult(transcript);
+            this.restartAttempts = 0;
+            
+            if (this.isMobile) {
+              this.restart();
+            }
           }
         }
       };
 
-      this.recognition.onend = () => {
-        if (this.isInitialized) {
-          this.recognition?.start();
+      this.recognition.onerror = (event: SpeechRecognitionErrorEvent): void => {
+        if (this.isListening) {
+          if (event.error !== 'no-speech') {
+            console.warn('Speech Recognition error:', event.error);
+            onError?.(event.error);
+            if (this.restartAttempts >= this.MAX_RESTART_ATTEMPTS) {
+              this.stop();
+            } else if (this.isMobile) {
+              this.restart();
+            }
+          }
         }
       };
 
-      this.recognition.onerror = (event) => {
-        console.warn('Speech Recognition error:', event.error);
-        onError?.(event.error);
+      this.recognition.onend = (): void => {
+        if (this.isListening) {
+          if (this.isMobile) {
+            this.restart();
+          } else if (this.restartAttempts < this.MAX_RESTART_ATTEMPTS) {
+            this.restartAttempts++;
+            setTimeout(() => {
+              if (this.isListening) {
+                this.recognition?.start();
+              }
+            }, 300);
+          } else {
+            this.stop();
+            onError?.('Maximum aantal herstart pogingen bereikt');
+          }
+        }
       };
 
       this.recognition.start();
     } catch (error) {
-      console.error('Speech Recognition start mislukt:', error);
-      onError?.(error);
+      const errorMessage = error instanceof Error ? error.message : 'Onbekende fout';
+      onError?.(errorMessage);
+    }
+  }
+
+  private restart(): void {
+    if (this.isListening && this.recognition) {
+      setTimeout(() => {
+        try {
+          this.recognition?.start();
+        } catch (error) {
+          console.error('Herstart mislukt:', error);
+        }
+      }, 100);
     }
   }
 
   public stop(): void {
+    this.isListening = false;
+    this.restartAttempts = 0;
     if (this.recognition) {
+      this.resetHandlers();
       try {
         this.recognition.stop();
       } catch (error) {
-        console.error('Speech Recognition stop mislukt:', error);
+        console.error('Stop mislukt:', error);
       }
+    }
+  }
+
+  private resetHandlers(): void {
+    if (this.recognition) {
+      this.recognition.onend = (): void => {};
+      this.recognition.onresult = (): void => {};
+      this.recognition.onerror = (): void => {};
     }
   }
 

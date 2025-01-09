@@ -1,12 +1,22 @@
 import React from 'react';
 import { CopyButton } from '../CopyButton/CopyButton';
+import { Image } from 'lucide-react';
 
 interface ImageSectionProps {
   imageUrl: string | null;
   isGeneratingImage?: boolean;
+  onGenerateImage: () => void;
+  text?: string;
+  isTransforming?: boolean;
 }
 
-export const ImageSection: React.FC<ImageSectionProps> = ({ imageUrl, isGeneratingImage }) => {
+export const ImageSection: React.FC<ImageSectionProps> = ({ 
+  imageUrl, 
+  isGeneratingImage,
+  onGenerateImage,
+  text,
+  isTransforming 
+}) => {
   return (
     <div className="lg:sticky lg:top-8">
       <div className="relative">

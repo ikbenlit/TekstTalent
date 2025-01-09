@@ -10,11 +10,11 @@ interface TextSectionProps {
   transformedText: string;
   onTransformedTextChange: (text: string) => void;
   onTransform: () => void;
-  onGenerateImage: () => void;
   isTransforming: boolean;
-  isGeneratingImage: boolean;
   format: TransformFormat;
   onFormatChange: (format: TransformFormat) => void;
+  onGenerateImage: () => void;
+  isGeneratingImage: boolean;
 }
 
 export const TextSection: React.FC<TextSectionProps> = ({
@@ -23,11 +23,11 @@ export const TextSection: React.FC<TextSectionProps> = ({
   transformedText,
   onTransformedTextChange,
   onTransform,
-  onGenerateImage,
   isTransforming,
-  isGeneratingImage,
   format,
   onFormatChange,
+  onGenerateImage,
+  isGeneratingImage,
 }) => {
   return (
     <div className="space-y-4">
@@ -44,36 +44,49 @@ export const TextSection: React.FC<TextSectionProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <select
-          value={format}
-          onChange={(e) => onFormatChange(e.target.value as TransformFormat)}
-          className="flex-1 px-4 py-2 border border-gray-200 rounded-lg 
-            focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500]"
-        >
-          <option value="business-letter">Zakelijke brief</option>
-          <option value="social-post">Social media bericht</option>
-          <option value="email">E-mail</option>
-        </select>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <select
+            value={format}
+            onChange={(e) => onFormatChange(e.target.value as TransformFormat)}
+            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg 
+              focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500]"
+          >
+            <option value="business-letter">Zakelijke brief</option>
+            <option value="social-post">Social media bericht</option>
+            <option value="email">E-mail</option>
+          </select>
+          
+          <button 
+            onClick={onTransform}
+            disabled={!text || isTransforming}
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 
+              bg-[#FF4500] text-white rounded-lg hover:bg-[#FF5722] 
+              disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isTransforming ? (
+              <>
+                <Type className="w-4 h-4 animate-spin" />
+                Bezig...
+              </>
+            ) : (
+              <>
+                <Type className="w-4 h-4" />
+                Transformeer
+              </>
+            )}
+          </button>
+        </div>
         
-        <button 
-          onClick={onTransform}
-          disabled={!text || isTransforming}
-          className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 
-            bg-[#FF4500] text-white rounded-lg hover:bg-[#FF5722] 
-            disabled:opacity-50 disabled:cursor-not-allowed"
+        <button
+          onClick={onGenerateImage}
+          disabled={!text || isTransforming || isGeneratingImage}
+          className="w-full flex items-center justify-center gap-2 px-6 py-2
+            bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg 
+            hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isTransforming ? (
-            <>
-              <Type className="w-4 h-4 animate-spin" />
-              Bezig...
-            </>
-          ) : (
-            <>
-              <Type className="w-4 h-4" />
-              Transformeer
-            </>
-          )}
+          <Image className="w-4 h-4" />
+          <span>Genereer Afbeelding</span>
         </button>
       </div>
 
@@ -100,17 +113,6 @@ export const TextSection: React.FC<TextSectionProps> = ({
           </div>
         )}
       </div>
-
-      <button
-        onClick={onGenerateImage}
-        disabled={!text || isTransforming || isGeneratingImage}
-        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2
-          bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg 
-          hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Image className="w-4 h-4" />
-        <span>Genereer Afbeelding</span>
-      </button>
     </div>
   );
 }; 

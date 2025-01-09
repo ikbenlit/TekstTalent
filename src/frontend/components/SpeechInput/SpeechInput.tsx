@@ -48,6 +48,11 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({ onTextChange }) => {
         <p className="text-red-500 text-sm mb-2">{error}</p>
       )}
       <div className="relative">
+        {isListening && (
+          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-32 h-6">
+            <VolumeIndicator isListening={isListening} />
+          </div>
+        )}
         <button
           onClick={toggleListening}
           className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all duration-200

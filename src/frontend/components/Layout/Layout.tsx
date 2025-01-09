@@ -29,7 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Content */}
       <div className="relative flex flex-col min-h-screen">
         <main className="max-w-7xl mx-auto w-full py-6 px-4 md:py-12 lg:px-8 flex-grow">
-          <h1 className={`text-3xl md:text-5xl font-extrabold text-center text-[#FF4500] mb-8 md:mb-16 tracking-tight ${inter.className}`}>
+          <h1 className={`text-2xl md:text-4xl font-extrabold text-[#FF4500] mb-6 md:mb-12 tracking-tight ${inter.className} text-left`}>
             TekstTalent
           </h1>
           <div className="relative z-10 backdrop-blur-sm">
