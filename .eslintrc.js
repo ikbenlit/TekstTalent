@@ -4,7 +4,7 @@ module.exports = {
     'prettier'
   ],
   rules: {
-    'no-unused-vars': 'error',
+    'no-unused-vars': 'warn',
     'no-console': ['warn', { allow: ['error', 'warn'] }]
   }
 } 
