@@ -12,10 +12,11 @@ export class SpeechRecognitionService {
   private isListening = false;
   private currentText = '';
   private language: string = 'nl-NL';
+  private isMobile = typeof window !== 'undefined' && 
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  private isProcessing = false;
 
   constructor() {
-    const isMobile = typeof window !== 'undefined' && 
-      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     this.initializeRecognition();
   }
 
@@ -32,8 +33,15 @@ export class SpeechRecognitionService {
       }
 
       this.recognition = new SpeechRecognitionImpl();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = false;
+      
+      if (this.isMobile) {
+        this.recognition.continuous = false;
+        this.recognition.interimResults = false;
+      } else {
+        this.recognition.continuous = true;
+        this.recognition.interimResults = false;
+      }
+      
       this.recognition.lang = this.language;
     } catch (error) {
       console.error('Speech Recognition initialisatie mislukt:', error);
@@ -41,13 +49,14 @@ export class SpeechRecognitionService {
   }
 
   public start(onResult: (text: string) => void, onError?: (error: string) => void): void {
-    if (!this.recognition) {
-      onError?.('Speech Recognition niet beschikbaar');
+    if (!this.recognition || this.isProcessing) {
+      onError?.('Speech Recognition niet beschikbaar of bezig');
       return;
     }
 
     try {
       this.isListening = true;
+      this.isProcessing = false;
 
       this.recognition.onresult = (event: SpeechRecognitionEvent): void => {
         if (event.results.length > 0) {
@@ -62,12 +71,32 @@ export class SpeechRecognitionService {
 
       this.recognition.onerror = (event: SpeechRecognitionErrorEvent): void => {
         if (event.error !== 'no-speech') {
+          console.warn('Speech Recognition error:', event.error);
           onError?.(event.error);
         }
       };
 
+      if (this.isMobile) {
+        this.recognition.onend = (): void => {
+          if (this.isListening && !this.isProcessing) {
+            this.isProcessing = true;
+            setTimeout(() => {
+              if (this.isListening) {
+                try {
+                  this.recognition?.start();
+                } catch (error) {
+                  console.warn('Herstart mislukt:', error);
+                }
+              }
+              this.isProcessing = false;
+            }, 200);
+          }
+        };
+      }
+
       this.recognition.start();
     } catch (error) {
+      this.isProcessing = false;
       const errorMessage = error instanceof Error ? error.message : 'Onbekende fout';
       onError?.(errorMessage);
     }
@@ -77,6 +106,7 @@ export class SpeechRecognitionService {
     if (!this.recognition) return;
 
     this.isListening = false;
+    this.isProcessing = false;
     
     this.recognition.onresult = (): void => {};
     this.recognition.onerror = (): void => {};
