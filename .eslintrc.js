@@ -1,6 +1,6 @@
 module.exports = {
   extends: [
-    'next/core-web-plugins',
+    'next',
     'prettier'
   ],
   rules: {
