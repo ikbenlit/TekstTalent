@@ -1,22 +1,27 @@
 // Speech Recognition types
-export type SpeechRecognition = typeof window.SpeechRecognition | typeof window.webkitSpeechRecognition;
-
 export interface SpeechRecognitionEvent {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string;
-      };
-      isFinal: boolean;
-    };
-  };
-  resultIndex: number;
+  results: SpeechRecognitionResultList;
 }
 
-export interface SpeechRecognitionOptions {
-  language?: string;
-  continuous?: boolean;
-  interimResults?: boolean;
+export interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: any) => void;
+  start: () => void;
+  stop: () => void;
+}
+
+export interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
 }
 
 // Transform types

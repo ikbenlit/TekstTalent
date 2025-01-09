@@ -1,4 +1,4 @@
-import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionOptions } from '../types';
+import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionConstructor } from '../types';
 
 export class SpeechRecognitionService {
   private recognition: SpeechRecognition | null = null;
@@ -7,16 +7,17 @@ export class SpeechRecognitionService {
   constructor() {
     try {
       // Check voor verschillende browser implementaties
-      const SpeechRecognition = window.SpeechRecognition || 
-                               (window as any).webkitSpeechRecognition ||
-                               (window as any).mozSpeechRecognition ||
-                               (window as any).msSpeechRecognition;
+      const SpeechRecognitionImpl = (
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition ||
+        null
+      ) as SpeechRecognitionConstructor | null;
 
-      if (!SpeechRecognition) {
+      if (!SpeechRecognitionImpl) {
         throw new Error('Speech Recognition niet ondersteund in deze browser');
       }
 
-      this.recognition = new SpeechRecognition();
+      this.recognition = new SpeechRecognitionImpl();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = 'nl-NL';
