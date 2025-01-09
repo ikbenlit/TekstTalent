@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// Custom SASS variables
+:root {
+  --primary-color: #0ea5e9;
+  --error-color: #dc3545;
+}
+
+// Global styles
+html,
+body {
+  @apply antialiased;
+}
+
+// Import component styles
+@import '../components/SpeechInput/SpeechInput.scss'; 

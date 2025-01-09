@@ -1,0 +1,50 @@
+.speech-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+
+  &-button {
+    padding: 1rem 2rem;
+    border-radius: 2rem;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &.listening {
+      background-color: #dc3545;
+      animation: pulse 1.5s infinite;
+    }
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  &-status {
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  &-error {
+    color: #dc3545;
+    padding: 1rem;
+    border: 1px solid #dc3545;
+    border-radius: 0.5rem;
+    background-color: #fff;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+} 

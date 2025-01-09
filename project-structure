@@ -1,0 +1,40 @@
+Teksttalent/
+├── src/
+│   ├── app/                       # App Router directory
+│   │   ├── layout.tsx           # Root layout
+│   │   ├── page.tsx            # Home page
+│   │   ├── api/               # API routes
+│   │   └── (routes)/         # Gegroepeerde routes
+│   │
+│   ├── core/                      # Core business logic (platform-onafhankelijk)
+│   │   ├── speech/               # Spraakherkenning functionaliteit
+│   │   ├── transformation/       # Tekst transformatie logica
+│   │   └── export/              # Export functionaliteit
+│   │
+│   ├── frontend/                  # Standalone app frontend
+│   │   ├── components/          # React componenten
+│   │   ├── hooks/              # Custom React hooks
+│   │   ├── styles/             # CSS/SCSS bestanden
+│   │   └── utils/              # Frontend utilities
+│   │
+│   ├── backend/                   # Standalone app backend
+│   │   ├── api/                # API endpoints
+│   │   ├── services/           # Business services
+│   │   └── utils/              # Backend utilities
+│   │
+│   └── integrations/              # Platform integraties
+│       ├── wordpress/           # WordPress specifieke code
+│       └── future-platforms/   # Voorbereid voor andere integraties
+│
+├── public/                        # Statische bestanden
+│   ├── dist/                         # Build output
+│   │   ├── standalone/             # Standalone app build
+│   │   └── wordpress/             # WordPress plugin build
+├── tests/                         # Test bestanden
+│   ├── unit/                  # Unit tests
+│   ├── integration/          # Integratietests
+│   └── e2e/                 # End-to-end tests
+├── config/                        # Configuratie bestanden
+│   ├── standalone/           # Standalone app configuratie
+│   └── wordpress/           # WordPress plugin configuratie
+└── docs/                          # Documentatie 
