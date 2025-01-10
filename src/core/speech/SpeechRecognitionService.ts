@@ -26,6 +26,8 @@ export class SpeechRecognitionService {
   private noMatchCount: number = 0;
   private readonly MAX_NO_MATCH_RETRIES = 2;
   private shouldResetText: boolean = true;
+  private speechEndTimeout: number | null = null;
+  private readonly SPEECH_END_DELAY = 5000; // 5 seconden wachten bij stilte
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
@@ -47,12 +49,34 @@ export class SpeechRecognitionService {
         deviceType: this.deviceDetection.getDeviceType(),
         browserType: this.deviceDetection.getBrowserType(),
         continuous: config.continuous,
-        interimResults: config.interimResults
+        interimResults: config.interimResults,
+        speechEndDelay: this.SPEECH_END_DELAY
       });
 
       this.recognition.onstart = () => {
         console.debug('[Speech] Recognition started');
         this.isListening = true;
+      };
+
+      this.recognition.onspeechend = () => {
+        console.debug('[Speech] Speech ended');
+        // Start timer voor vertraagde stop
+        if (this.speechEndTimeout) {
+          window.clearTimeout(this.speechEndTimeout);
+        }
+        this.speechEndTimeout = window.setTimeout(() => {
+          console.debug('[Speech] Speech end timeout reached');
+          this.recognition?.stop();
+        }, this.SPEECH_END_DELAY);
+      };
+
+      this.recognition.onspeechstart = () => {
+        console.debug('[Speech] Speech started');
+        // Cancel eventuele lopende timer
+        if (this.speechEndTimeout) {
+          window.clearTimeout(this.speechEndTimeout);
+          this.speechEndTimeout = null;
+        }
       };
 
       this.recognition.onend = () => {
@@ -92,12 +116,26 @@ export class SpeechRecognitionService {
             this.deviceDetection.getBrowserType() === 'chrome') {
           // Specifieke logica voor mobiele Chrome
           if (result.isFinal) {
-            const transcript = result[0].transcript;
+            let transcript = result[0].transcript.trim();
+            
+            // Zorg dat de eerste letter een hoofdletter is
+            if (transcript.length > 0) {
+              transcript = transcript.charAt(0).toUpperCase() + transcript.slice(1).toLowerCase();
+            }
+            
             if (this.accumulatedText && !this.shouldResetText) {
-              this.accumulatedText += '. ' + transcript;
+              // Check of de vorige zin eindigt met leesteken
+              const hasEndPunctuation = /[.!?]$/.test(this.accumulatedText);
+              if (!hasEndPunctuation) {
+                this.accumulatedText += '. ';
+              } else {
+                this.accumulatedText += ' ';
+              }
+              this.accumulatedText += transcript;
             } else {
               this.accumulatedText = transcript;
             }
+            
             console.debug('[Speech] Accumulated text (mobile):', this.accumulatedText.trim());
             this.config.onResult?.(this.accumulatedText.trim());
           }
@@ -141,14 +179,6 @@ export class SpeechRecognitionService {
 
       this.recognition.onsoundend = () => {
         console.debug('[Speech] Sound ended');
-      };
-
-      this.recognition.onspeechstart = () => {
-        console.debug('[Speech] Speech started');
-      };
-
-      this.recognition.onspeechend = () => {
-        console.debug('[Speech] Speech ended');
       };
     }
   }
