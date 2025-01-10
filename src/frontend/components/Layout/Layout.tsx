@@ -1,58 +1,38 @@
-import Image from 'next/image';
-import { Inter } from 'next/font/google';
-import { DebugLog } from '../DebugLog/DebugLog';
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-});
+import React from 'react';
+import { ClipboardCopy } from 'lucide-react';
+import { DebugLogger } from '@/core/utils/DebugLogger';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout = ({ children }: LayoutProps) => {
+  const [copySuccess, setCopySuccess] = React.useState(false);
+
+  const handleCopyLogs = async () => {
+    try {
+      await navigator.clipboard.writeText(DebugLogger.getLogs());
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      // Silent fail
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FF4500]/5 via-white to-[#9F7AEA]/5 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0">
-        <div className="absolute -top-48 -left-48 w-96 h-96 bg-[#FF6B6B] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-        <div className="absolute top-0 -right-48 w-96 h-96 bg-[#FF4500] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-48 left-48 w-96 h-96 bg-[#9F7AEA] rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main>{children}</main>
       </div>
-
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-white/80 to-transparent"></div>
-
-      {/* Grid pattern */}
-      <div className="absolute inset-0 bg-[url('/assets/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"></div>
-
-      {/* Content */}
-      <div className="relative flex flex-col min-h-screen">
-        <main className="max-w-7xl mx-auto w-full py-6 px-4 md:py-12 lg:px-8 flex-grow">
-          <h1 className={`text-2xl md:text-4xl font-extrabold text-[#FF4500] mb-6 md:mb-12 tracking-tight ${inter.className} text-left`}>
-            TekstTalent
-          </h1>
-          <div className="relative z-10 backdrop-blur-sm">
-            {children}
-          </div>
-        </main>
-
-        {/* Footer met logo */}
-        <footer className="relative z-10 w-full py-4 mt-8">
-          <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-2">
-            <span className="text-gray-500 text-sm">Powered by</span>
-            <Image
-              src="/images/logos/ikbenlit_logo_banner_small.png"
-              alt="ikbenlit logo"
-              width={100}
-              height={30}
-              className="object-contain"
-            />
-          </div>
-        </footer>
-      </div>
-      <DebugLog />
+      
+      {/* Fixed Debug Log Button */}
+      <button
+        onClick={handleCopyLogs}
+        className="fixed bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white text-gray-500 hover:text-gray-700 rounded-full shadow-md hover:shadow-lg transition-all"
+      >
+        <ClipboardCopy className="w-3.5 h-3.5" />
+        <span>{copySuccess ? 'Gekopieerd!' : 'Debug log'}</span>
+      </button>
     </div>
   );
 }; 

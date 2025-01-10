@@ -1,40 +1,137 @@
 import { BrowserType, DeviceType } from '@/types/speech.types';
 
 export class DeviceDetectionService {
+  private userAgent: string;
+  private platform: string;
+
+  constructor() {
+    this.userAgent = navigator.userAgent;
+    this.platform = navigator.platform;
+  }
+
   public isMobile(): boolean {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(this.userAgent);
+  }
+
+  public isIOS(): boolean {
+    // Modern iOS detection, inclusief iPad op iPadOS
+    return [
+      'iPad Simulator',
+      'iPhone Simulator',
+      'iPod Simulator',
+      'iPad',
+      'iPhone',
+      'iPod'
+    ].includes(this.platform) || 
+    // iPad op iOS 13+ detectie
+    (this.platform === 'MacIntel' && navigator.maxTouchPoints > 0);
+  }
+
+  public isModernIPhone(): boolean {
+    // iPhone X of nieuwer (iOS 11+)
+    return /iPhone/.test(this.userAgent) && 
+           (window.screen.height >= 812 || window.screen.width >= 812);
   }
 
   public getBrowserType(): BrowserType {
-    const ua = navigator.userAgent;
-    if (/chrome|chromium/i.test(ua)) return 'chrome';
-    if (/firefox/i.test(ua)) return 'firefox';
-    if (/safari/i.test(ua)) return 'safari';
+    const ua = this.userAgent.toLowerCase();
+    
+    // Safari versie detectie
+    const safariVersion = ua.match(/version\/(\d+)/i);
+    const isSafari = /safari/i.test(ua) && !/chrome|chromium/i.test(ua);
+    
+    // Chrome versie detectie
+    const chromeVersion = ua.match(/(?:chrome|chromium)\/(\d+)/i);
+    
+    // Firefox versie detectie
+    const firefoxVersion = ua.match(/firefox\/(\d+)/i);
+
+    if (chromeVersion) {
+      return 'chrome';
+    }
+    if (isSafari) {
+      return 'safari';
+    }
+    if (firefoxVersion) {
+      return 'firefox';
+    }
     return 'other';
   }
 
+  public getSafariVersion(): number | null {
+    const match = this.userAgent.match(/version\/(\d+)/i);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  public getIOSVersion(): number | null {
+    const match = this.userAgent.match(/OS (\d+)_/i);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
   public getDeviceType(): DeviceType {
-    const ua = navigator.userAgent;
-    if (/iPad|Android(?!.*Mobile)|Tablet/i.test(ua)) return 'tablet';
-    if (this.isMobile()) return 'mobile';
+    // iPad specifieke detectie
+    if (/iPad|MacIntel/.test(this.platform) && navigator.maxTouchPoints > 0) {
+      return 'tablet';
+    }
+    
+    // iPhone/Android tablet detectie
+    if (/iPad|Android(?!.*Mobile)|Tablet/.test(this.userAgent)) {
+      return 'tablet';
+    }
+
+    // Modern iPhone detectie
+    if (this.isModernIPhone()) {
+      return 'mobile';
+    }
+
+    if (this.isMobile()) {
+      return 'mobile';
+    }
+
     return 'desktop';
   }
 
   public getSpeechRecognitionConfig(): { continuous: boolean; interimResults: boolean } {
     const deviceType = this.getDeviceType();
     const browserType = this.getBrowserType();
+    const iosVersion = this.getIOSVersion();
+    const safariVersion = this.getSafariVersion();
+
+    // Specifieke configuratie voor moderne iPhones met Safari
+    if (this.isModernIPhone() && browserType === 'safari' && iosVersion && iosVersion >= 13) {
+      return {
+        continuous: false,  // iOS Safari ondersteunt geen continuous mode
+        interimResults: true  // Maar wel interim results voor betere feedback
+      };
+    }
 
     // Specifieke configuratie voor mobiele Chrome browsers
     if (deviceType === 'mobile' && browserType === 'chrome') {
       return {
-        continuous: false,
+        continuous: false,  // Chrome mobile werkt beter met non-continuous mode
+        interimResults: true  // Interim results nodig voor betere feedback
+      };
+    }
+
+    // Specifieke configuratie voor Safari desktop
+    if (browserType === 'safari' && safariVersion && safariVersion >= 14) {
+      return {
+        continuous: true,
         interimResults: true
       };
     }
 
-    // Standaard configuratie voor andere apparaten/browsers
+    // Configuratie voor tablets
+    if (deviceType === 'tablet') {
+      return {
+        continuous: true,
+        interimResults: true
+      };
+    }
+
+    // Standaard configuratie voor desktop/andere apparaten
     return {
-      continuous: false,
+      continuous: true,
       interimResults: false
     };
   }
