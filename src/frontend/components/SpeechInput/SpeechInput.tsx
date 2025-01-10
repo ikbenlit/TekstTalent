@@ -1,76 +1,65 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { SpeechRecognitionService } from '@/core/speech/SpeechRecognitionService';
+import React, { useState, useEffect } from 'react';
 import { Mic, MicOff } from 'lucide-react';
-import { VolumeIndicator } from '../VolumeIndicator/VolumeIndicator';
+import { SpeechRecognitionService } from '@/core/speech/SpeechRecognitionService';
 
 interface SpeechInputProps {
   onTextChange: (text: string) => void;
 }
 
-export const SpeechInput: React.FC<SpeechInputProps> = ({ onTextChange }) => {
+export const SpeechInput = ({ onTextChange }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [speechService, setSpeechService] = useState<SpeechRecognitionService | null>(null);
+  const [speechService] = useState(() => new SpeechRecognitionService());
 
   useEffect(() => {
-    const service = new SpeechRecognitionService();
-    setSpeechService(service);
-    
-    if (!service.isSupported()) {
+    if (!speechService.isSupported()) {
       setError('Speech herkenning wordt niet ondersteund in deze browser');
     }
-  }, []);
+  }, [speechService]);
 
-  const toggleListening = () => {
-    if (!speechService) return;
-
-    if (isListening) {
-      speechService.stopListening();
+  const handleStart = () => {
+    if (error) {
       setIsListening(false);
     } else {
-      speechService.start(
-        (text) => onTextChange(text),
+      setIsListening(true);
+      speechService.startListening(
+        (text) => {
+          onTextChange(text);
+          setIsListening(false);
+        },
         (error) => {
           setError(error);
           setIsListening(false);
         }
       );
-      setIsListening(true);
-      setError(null);
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      {error && (
-        <p className="text-red-500 text-sm mb-2">{error}</p>
-      )}
-      <div className="relative">
-        {isListening && (
-          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-32 h-6">
-            <VolumeIndicator isListening={isListening} />
-          </div>
-        )}
-        <button
-          onClick={toggleListening}
-          className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center transition-all duration-200
-            ${isListening 
-              ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-              : 'bg-gradient-to-br from-[#FF4500] to-[#FF8C00] hover:scale-105'
-            }`}
-        >
+    <div className="space-y-2">
+      <button
+        onClick={handleStart}
+        disabled={isListening || !!error}
+        className="flex flex-col items-center gap-2"
+      >
+        <div className={`p-6 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#FF4500] hover:bg-[#FF5722]'} disabled:opacity-50 transition-colors`}>
           {isListening ? (
-            <MicOff className="w-6 h-6 md:w-8 md:h-8 text-white" />
+            <MicOff className="w-8 h-8 text-white" />
           ) : (
-            <Mic className="w-6 h-6 md:w-8 md:h-8 text-white" />
+            <Mic className="w-8 h-8 text-white" />
           )}
-        </button>
-      </div>
-      <p className="text-gray-500 text-sm mt-2">
-        {isListening ? 'Opname... Klik om te stoppen' : 'Klik om opname te starten'}
-      </p>
+        </div>
+        <span className="text-gray-700 font-medium">
+          {isListening ? 'Luisteren...' : 'Start Opname'}
+        </span>
+      </button>
+      {error && (
+        <div className="text-red-500 text-sm text-center">
+          {error}
+        </div>
+      )}
     </div>
   );
 }; 
