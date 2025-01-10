@@ -22,6 +22,9 @@ export class SpeechRecognitionService {
   private config: SpeechConfig = {};
   private deviceDetection: DeviceDetectionService;
   private accumulatedText: string = '';
+  private isListening: boolean = false;
+  private noMatchCount: number = 0;
+  private readonly MAX_NO_MATCH_RETRIES = 2;
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
@@ -48,15 +51,25 @@ export class SpeechRecognitionService {
 
       this.recognition.onstart = () => {
         console.debug('[Speech] Recognition started');
+        this.isListening = true;
       };
 
       this.recognition.onend = () => {
         console.debug('[Speech] Recognition ended');
-        // Als we op een mobiel Chrome apparaat zitten, herstart dan automatisch
+        this.isListening = false;
+
+        // Alleen herstarten als we nog steeds willen luisteren en niet te vaak no-matches hebben gehad
         if (this.deviceDetection.getDeviceType() === 'mobile' && 
-            this.deviceDetection.getBrowserType() === 'chrome') {
+            this.deviceDetection.getBrowserType() === 'chrome' &&
+            this.isListening &&
+            this.noMatchCount < this.MAX_NO_MATCH_RETRIES) {
           console.debug('[Speech] Auto-restarting for mobile Chrome');
-          this.recognition?.start();
+          setTimeout(() => {
+            this.recognition?.start();
+          }, 100); // Kleine vertraging om de browser tijd te geven
+        } else if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
+          console.debug('[Speech] Stopping due to too many no-matches');
+          this.config.onError?.('Geen spraak gedetecteerd');
         }
       };
       
@@ -67,6 +80,9 @@ export class SpeechRecognitionService {
           transcript: result[0].transcript,
           confidence: result[0].confidence
         });
+        
+        // Reset no-match teller bij een geldig resultaat
+        this.noMatchCount = 0;
         
         if (this.deviceDetection.getDeviceType() === 'mobile' && 
             this.deviceDetection.getBrowserType() === 'chrome') {
@@ -99,6 +115,7 @@ export class SpeechRecognitionService {
 
       this.recognition.onnomatch = () => {
         console.debug('[Speech] No match found');
+        this.noMatchCount++;
       };
 
       this.recognition.onaudiostart = () => {
@@ -129,6 +146,8 @@ export class SpeechRecognitionService {
 
   public startListening(onResult: (text: string) => void, onError?: (error: string) => void): void {
     console.debug('[Speech] Starting recognition');
+    this.isListening = true;
+    this.noMatchCount = 0;
     this.accumulatedText = ''; // Reset accumulated text
     this.config.onResult = onResult;
     this.config.onError = onError;
@@ -137,6 +156,7 @@ export class SpeechRecognitionService {
 
   public stopListening(): void {
     console.debug('[Speech] Stopping recognition');
+    this.isListening = false;
     this.recognition?.stop();
   }
 
