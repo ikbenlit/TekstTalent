@@ -27,7 +27,7 @@ export const SpeechInput: React.FC<SpeechInputProps> = ({ onTextChange }) => {
     if (!speechService) return;
 
     if (isListening) {
-      speechService.stop();
+      speechService.stopListening();
       setIsListening(false);
     } else {
       speechService.start(
