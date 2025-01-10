@@ -1,7 +1,7 @@
-import { TransformFormat } from '../types';
+import { TransformFormat } from '@/types/api.types';
 
 export const getPromptForFormat = (format: TransformFormat, text: string) => {
-  const prompts = {
+  const prompts: Record<TransformFormat, string> = {
     'business-letter': `Transformeer de volgende tekst naar een formele zakelijke brief in het Nederlands.
       Behoud de kern van de boodschap, maar gebruik deze exacte layout:
 
@@ -64,7 +64,11 @@ export const getPromptForFormat = (format: TransformFormat, text: string) => {
       - Behoud de kernboodschap van: "${text}"
       - Gebruik zakelijke maar toegankelijke taal
       - Maak het bondig en to-the-point
-      - Zorg voor een professionele toon`
+      - Zorg voor een professionele toon`,
+
+    'bullet-points': `Transformeer de volgende tekst naar overzichtelijke bullet points...`,
+    'summary': `Maak een beknopte samenvatting van de volgende tekst...`,
+    'meeting-notes': `Transformeer de volgende tekst naar gestructureerde vergadernotities...`
   };
 
   return prompts[format].replace('${text}', text);

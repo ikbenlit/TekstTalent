@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { TransformControls } from "@/frontend/components/TransformControls/TransformControls";
-import { TransformFormat } from '@/core/types';
+import { TransformFormat } from '@/types/api.types';
 import { Type, Image } from 'lucide-react';
 import { CopyButton } from '@/frontend/components/CopyButton/CopyButton';
 import { Layout } from '@/frontend/components/Layout/Layout';

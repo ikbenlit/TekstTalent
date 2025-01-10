@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { TransformFormat } from '@/core/types';
+import { TransformFormat } from '@/types/api.types';
 
 interface TransformControlsProps {
   format: TransformFormat;

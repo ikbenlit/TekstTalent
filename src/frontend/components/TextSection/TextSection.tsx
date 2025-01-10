@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TransformFormat } from '@/core/types';
+import { TransformFormat } from '@/types/api.types';
 import { TransformControls } from '../TransformControls/TransformControls';
 import { CopyButton } from '../CopyButton/CopyButton';
 import { Image, Type } from 'lucide-react';
