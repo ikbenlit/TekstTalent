@@ -25,6 +25,7 @@ export class SpeechRecognitionService {
   private isListening: boolean = false;
   private noMatchCount: number = 0;
   private readonly MAX_NO_MATCH_RETRIES = 2;
+  private shouldResetText: boolean = true;
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
@@ -64,12 +65,14 @@ export class SpeechRecognitionService {
             this.isListening &&
             this.noMatchCount < this.MAX_NO_MATCH_RETRIES) {
           console.debug('[Speech] Auto-restarting for mobile Chrome');
+          this.shouldResetText = false; // Behoud tekst voor volgende sessie
           setTimeout(() => {
             this.recognition?.start();
           }, 100); // Kleine vertraging om de browser tijd te geven
         } else if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
           console.debug('[Speech] Stopping due to too many no-matches');
           this.config.onError?.('Geen spraak gedetecteerd');
+          this.shouldResetText = true; // Reset tekst bij volgende start
         }
       };
       
@@ -89,7 +92,11 @@ export class SpeechRecognitionService {
           // Specifieke logica voor mobiele Chrome
           if (result.isFinal) {
             const transcript = result[0].transcript;
-            this.accumulatedText += ' ' + transcript;
+            if (this.accumulatedText && !this.shouldResetText) {
+              this.accumulatedText += '. ' + transcript;
+            } else {
+              this.accumulatedText = transcript;
+            }
             console.debug('[Speech] Accumulated text (mobile):', this.accumulatedText.trim());
             this.config.onResult?.(this.accumulatedText.trim());
           }
@@ -110,6 +117,7 @@ export class SpeechRecognitionService {
           timeStamp: event.timeStamp
         });
         this.config.onError?.(event.error);
+        this.shouldResetText = true; // Reset tekst bij error
         this.stopListening();
       };
 
@@ -148,7 +156,11 @@ export class SpeechRecognitionService {
     console.debug('[Speech] Starting recognition');
     this.isListening = true;
     this.noMatchCount = 0;
-    this.accumulatedText = ''; // Reset accumulated text
+    if (this.shouldResetText) {
+      console.debug('[Speech] Resetting accumulated text');
+      this.accumulatedText = '';
+    }
+    this.shouldResetText = true; // Standaard resetten bij volgende keer
     this.config.onResult = onResult;
     this.config.onError = onError;
     this.recognition?.start();
@@ -157,6 +169,7 @@ export class SpeechRecognitionService {
   public stopListening(): void {
     console.debug('[Speech] Stopping recognition');
     this.isListening = false;
+    this.shouldResetText = true; // Reset tekst bij volgende start
     this.recognition?.stop();
   }
 
