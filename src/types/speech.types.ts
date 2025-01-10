@@ -1,8 +1,8 @@
 // Basis types
 export interface SpeechRecognitionResult {
+  isFinal: boolean;
   [index: number]: SpeechRecognitionAlternative;
   length: number;
-  isFinal: boolean;
 }
 
 export interface SpeechRecognitionError {
@@ -28,28 +28,34 @@ export interface SpeechRecognition extends EventTarget {
   lang: string;
   start(): void;
   stop(): void;
-  abort(): void;
-  onresult: (event: SpeechRecognitionEvent) => void;
-  onerror: (event: SpeechRecognitionErrorEvent) => void;
-  onend: () => void;
-  onstart: () => void;
+  
+  // Event handlers
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onnomatch: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onaudiostart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onaudioend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onsoundstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onsoundend: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onspeechstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onspeechend: ((this: SpeechRecognition, ev: Event) => any) | null;
 }
 
-export interface SpeechRecognitionEvent extends Event {
+export interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
   resultIndex: number;
-  results: {
-    [index: number]: SpeechRecognitionResult;
-    length: number;
-  };
 }
 
 export interface SpeechRecognitionConstructor {
-  new(): SpeechRecognition;
+  new (): SpeechRecognition;
 }
 
 export interface SpeechRecognitionErrorEvent extends Event {
   error: string;
   message?: string;
+  timeStamp: number;
 }
 
 export interface SpeechRecognitionAlternative {
