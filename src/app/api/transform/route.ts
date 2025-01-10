@@ -1,5 +1,5 @@
 import { OpenAI } from 'openai';
-import { TransformRequest } from '@/core/types';
+import { TransformRequest } from '@/types/api.types';
 import { getPromptForFormat } from '@/core/prompts/transformPrompts';
 
 const openai = new OpenAI({
