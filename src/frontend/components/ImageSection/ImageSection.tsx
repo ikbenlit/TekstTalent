@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CopyButton } from '../CopyButton/CopyButton';
 import { Image } from 'lucide-react';
 
@@ -17,16 +17,32 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
   text,
   isTransforming 
 }) => {
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const handleImageError = () => {
+    console.error('Failed to load image:', imageUrl);
+    setImageError('Failed to load image');
+  };
+
   return (
     <div className="lg:sticky lg:top-8">
       <div className="relative">
         <div className="w-full p-4 pb-12 border border-gray-200 rounded-lg bg-white">
           {imageUrl ? (
-            <img 
-              src={imageUrl} 
-              alt="Gegenereerde afbeelding" 
-              className="w-full h-auto rounded-md" 
-            />
+            <>
+              <img 
+                src={imageUrl} 
+                alt="Gegenereerde afbeelding" 
+                className="w-full h-auto rounded-md" 
+                onError={handleImageError}
+                style={{ display: imageError ? 'none' : 'block' }}
+              />
+              {imageError && (
+                <div className="aspect-video bg-gray-50 rounded-md flex items-center justify-center text-red-500 p-4 text-center">
+                  {imageError}
+                </div>
+              )}
+            </>
           ) : (
             <div className="aspect-video bg-gray-50 rounded-md flex items-center justify-center text-gray-400">
               Gegenereerde afbeelding verschijnt hier...

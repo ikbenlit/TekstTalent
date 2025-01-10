@@ -91,25 +91,38 @@ export class DeviceDetectionService {
     return 'desktop';
   }
 
+  public isAndroid(): boolean {
+    return /Android/i.test(this.userAgent);
+  }
+
   public getSpeechRecognitionConfig(): { continuous: boolean; interimResults: boolean } {
     const deviceType = this.getDeviceType();
     const browserType = this.getBrowserType();
     const iosVersion = this.getIOSVersion();
     const safariVersion = this.getSafariVersion();
+    const isAndroid = this.isAndroid();
+
+    // Specifieke configuratie voor Android Chrome
+    if (isAndroid && browserType === 'chrome') {
+      return {
+        continuous: false,  // Android Chrome werkt beter zonder continuous mode
+        interimResults: false  // Verminder complexiteit voor Android
+      };
+    }
 
     // Specifieke configuratie voor moderne iPhones met Safari
     if (this.isModernIPhone() && browserType === 'safari' && iosVersion && iosVersion >= 13) {
       return {
-        continuous: false,  // iOS Safari ondersteunt geen continuous mode
-        interimResults: true  // Maar wel interim results voor betere feedback
+        continuous: false,
+        interimResults: true
       };
     }
 
-    // Specifieke configuratie voor mobiele Chrome browsers
-    if (deviceType === 'mobile' && browserType === 'chrome') {
+    // Specifieke configuratie voor mobiele Chrome browsers (niet-Android)
+    if (deviceType === 'mobile' && browserType === 'chrome' && !isAndroid) {
       return {
-        continuous: false,  // Chrome mobile werkt beter met non-continuous mode
-        interimResults: true  // Interim results nodig voor betere feedback
+        continuous: false,
+        interimResults: true
       };
     }
 
@@ -132,7 +145,7 @@ export class DeviceDetectionService {
     // Standaard configuratie voor desktop/andere apparaten
     return {
       continuous: true,
-      interimResults: false
+      interimResults: true
     };
   }
 } 

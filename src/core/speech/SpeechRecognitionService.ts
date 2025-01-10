@@ -28,9 +28,11 @@ export class SpeechRecognitionService {
   private readonly MAX_NO_MATCH_RETRIES = 2;
   private shouldResetText: boolean = true;
   private manualStop: boolean = false;
-  private readonly RESTART_DELAY = 250; // Increased from 100ms to give more breathing room
+  private readonly RESTART_DELAY = 500; // Increased delay for mobile devices
+  private readonly RESTART_INTERVAL = 100; // Delay between stop and start
   private consecutiveRestarts = 0;
-  private readonly MAX_CONSECUTIVE_RESTARTS = 5;
+  private readonly MAX_CONSECUTIVE_RESTARTS = 3; // Reduced max restarts to prevent errors
+  private isRestarting = false; // New flag to track restart state
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
@@ -68,20 +70,66 @@ export class SpeechRecognitionService {
           }
           this.shouldResetText = true;
           this.consecutiveRestarts = 0;
+          this.isRestarting = false;
         } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
             this.deviceDetection.getBrowserType() === 'chrome') {
-          // Controleer aantal opeenvolgende herstarts
+          
+          // Speciale behandeling voor Android
+          if (this.deviceDetection.isAndroid()) {
+            // Voor Android: wacht langer en gebruik één enkele herstart
+            if (this.consecutiveRestarts >= 1) {
+              DebugLogger.log('[Speech] Android restart limit reached');
+              this.manualStop = true;
+              this.isListening = false;
+              this.isRestarting = false;
+              return;
+            }
+
+            if (this.isRestarting) {
+              return;
+            }
+
+            this.isRestarting = true;
+            this.consecutiveRestarts++;
+
+            // Langere delay voor Android
+            setTimeout(() => {
+              if (!this.manualStop && this.isListening) {
+                try {
+                  this.recognition?.start();
+                  this.isRestarting = false;
+                } catch (error) {
+                  DebugLogger.error('[Speech] Android restart error:', error);
+                  this.isRestarting = false;
+                  this.manualStop = true;
+                  this.isListening = false;
+                }
+              } else {
+                this.isRestarting = false;
+              }
+            }, 1000); // Langere delay voor Android
+            return;
+          }
+
+          // Bestaande logica voor andere mobiele browsers
           if (this.consecutiveRestarts >= this.MAX_CONSECUTIVE_RESTARTS) {
             DebugLogger.log('[Speech] Max restarts reached');
             this.manualStop = true;
             this.isListening = false;
+            this.isRestarting = false;
             this.config.onError?.('Te veel herstart pogingen');
+            return;
+          }
+
+          if (this.isRestarting) {
+            DebugLogger.log('[Speech] Already restarting, skipping...');
             return;
           }
 
           this.shouldResetText = false;
           this.noMatchCount = 0;
           this.consecutiveRestarts++;
+          this.isRestarting = true;
           
           // Add delay and check state before restart
           setTimeout(() => {
@@ -95,10 +143,13 @@ export class SpeechRecognitionService {
                     // Ignore stop errors
                   }
                   
-                  // Add small delay before restart
+                  // Add longer delay before restart for Android
                   setTimeout(() => {
                     try {
-                      this.recognition?.start();
+                      if (!this.manualStop && this.isListening) {
+                        this.recognition?.start();
+                        this.isRestarting = false;
+                      }
                     } catch (startError: any) {
                       DebugLogger.error('[Speech] Delayed restart error:', startError?.message || startError);
                       // Only trigger error if it's not already stopped
@@ -107,8 +158,9 @@ export class SpeechRecognitionService {
                         this.manualStop = true;
                         this.isListening = false;
                       }
+                      this.isRestarting = false;
                     }
-                  }, 100);
+                  }, this.RESTART_INTERVAL);
                 }
               } catch (error: any) {
                 DebugLogger.error('[Speech] Restart error:', error?.message || error);
@@ -117,7 +169,10 @@ export class SpeechRecognitionService {
                   this.manualStop = true;
                   this.isListening = false;
                 }
+                this.isRestarting = false;
               }
+            } else {
+              this.isRestarting = false;
             }
           }, this.RESTART_DELAY);
         }

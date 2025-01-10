@@ -50,21 +50,33 @@ export default function Home() {
   const handleGenerateImage = async () => {
     if (!text || isGeneratingImage) return;
     setIsGeneratingImage(true);
+    setError(null);
     
     try {
+      console.log('Starting image generation...');
       const response = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
 
-      if (!response.ok) throw new Error('Image generation failed');
-
+      console.log('Image generation response status:', response.status);
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Image generation failed');
+      }
+
+      if (!data.imageUrl) {
+        throw new Error('No image URL received');
+      }
+
+      console.log('Image URL received:', data.imageUrl);
       setImageUrl(data.imageUrl);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Image generation error:', error);
-      setError('Failed to generate image');
+      setError(error.message || 'Failed to generate image');
+      setImageUrl(null);
     } finally {
       setIsGeneratingImage(false);
     }
