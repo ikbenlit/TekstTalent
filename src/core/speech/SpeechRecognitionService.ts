@@ -84,4 +84,12 @@ export class SpeechRecognitionService {
   public stopListening(): void {
     this.recognition?.stop();
   }
+
+  public isSupported(): boolean {
+    try {
+      return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    } catch (error) {
+      return false;
+    }
+  }
 } 
