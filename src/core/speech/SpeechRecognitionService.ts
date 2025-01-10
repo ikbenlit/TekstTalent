@@ -6,6 +6,7 @@ import type {
 
 import { SpeechConfig } from '@/config/speech.config';
 import { DeviceDetectionService } from '@/core/device/DeviceDetectionService';
+import { DebugLogger } from '@/core/utils/DebugLogger';
 
 declare global {
   interface Window {
@@ -27,13 +28,16 @@ export class SpeechRecognitionService {
   private readonly MAX_NO_MATCH_RETRIES = 2;
   private shouldResetText: boolean = true;
   private manualStop: boolean = false;
+  private readonly RESTART_DELAY = 250; // Increased from 100ms to give more breathing room
+  private consecutiveRestarts = 0;
+  private readonly MAX_CONSECUTIVE_RESTARTS = 5;
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
     
     const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionConstructor) {
-      console.debug('[Speech] No SpeechRecognition constructor available');
+      DebugLogger.log('[Speech] No recognition available');
       throw new Error('Speech Recognition niet beschikbaar');
     }
 
@@ -43,52 +47,59 @@ export class SpeechRecognitionService {
       this.recognition.continuous = config.continuous;
       this.recognition.interimResults = config.interimResults;
       this.recognition.lang = 'nl-NL';
+      this.recognition.maxAlternatives = 1;
       
-      console.debug('[Speech] Initialized with config:', {
-        deviceType: this.deviceDetection.getDeviceType(),
-        browserType: this.deviceDetection.getBrowserType(),
-        continuous: config.continuous,
-        interimResults: config.interimResults
+      DebugLogger.log('[Speech] Init:', {
+        device: this.deviceDetection.getDeviceType(),
+        browser: this.deviceDetection.getBrowserType()
       });
 
       this.recognition.onstart = () => {
-        console.debug('[Speech] Recognition started');
         this.isListening = true;
         this.manualStop = false;
       };
 
       this.recognition.onend = () => {
-        console.debug('[Speech] Recognition ended');
-
         // Alleen stoppen bij handmatige stop of te veel no-matches
         if (this.manualStop || this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
-          console.debug('[Speech] Stopping due to manual stop or too many no-matches');
           this.isListening = false;
           if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
             this.config.onError?.('Geen spraak gedetecteerd');
           }
           this.shouldResetText = true;
+          this.consecutiveRestarts = 0;
         } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
             this.deviceDetection.getBrowserType() === 'chrome') {
-          // Altijd herstarten als we niet handmatig gestopt zijn
-          console.debug('[Speech] Auto-restarting for mobile Chrome');
+          // Controleer aantal opeenvolgende herstarts
+          if (this.consecutiveRestarts >= this.MAX_CONSECUTIVE_RESTARTS) {
+            DebugLogger.log('[Speech] Max restarts reached');
+            this.manualStop = true;
+            this.isListening = false;
+            this.config.onError?.('Te veel herstart pogingen');
+            return;
+          }
+
           this.shouldResetText = false;
-          this.noMatchCount = 0; // Reset no-match teller bij herstart
+          this.noMatchCount = 0;
+          this.consecutiveRestarts++;
+          
           setTimeout(() => {
-            if (!this.manualStop) {
-              this.recognition?.start();
+            if (!this.manualStop && this.isListening) {
+              try {
+                this.recognition?.start();
+              } catch (error) {
+                DebugLogger.error('[Speech] Restart error:', error);
+                this.config.onError?.('Fout bij herstarten van spraakherkenning');
+                this.manualStop = true;
+                this.isListening = false;
+              }
             }
-          }, 100);
+          }, this.RESTART_DELAY);
         }
       };
       
       this.recognition.onresult = (event: SpeechRecognitionEvent) => {
         const result = event.results[event.results.length - 1];
-        console.debug('[Speech] Result received:', {
-          isFinal: result.isFinal,
-          transcript: result[0].transcript,
-          confidence: result[0].confidence
-        });
         
         // Reset no-match teller bij een geldig resultaat
         this.noMatchCount = 0;
@@ -117,90 +128,77 @@ export class SpeechRecognitionService {
               this.accumulatedText = transcript;
             }
             
-            console.debug('[Speech] Accumulated text (mobile):', this.accumulatedText.trim());
             this.config.onResult?.(this.accumulatedText.trim());
           }
         } else {
           // Standaard logica voor andere apparaten
           if (result.isFinal) {
             const transcript = result[0].transcript;
-            console.debug('[Speech] Final transcript (desktop):', transcript);
             this.config.onResult?.(transcript);
           }
         }
       };
 
       this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('[Speech] Recognition Error:', {
-          error: event.error,
-          message: event.message,
-          timeStamp: event.timeStamp
-        });
+        DebugLogger.error('[Speech] Error:', event.error);
         this.config.onError?.(event.error);
         this.shouldResetText = true;
-        this.manualStop = true; // Stop bij errors
+        this.manualStop = true;
         this.stopListening();
       };
 
       this.recognition.onnomatch = () => {
-        console.debug('[Speech] No match found');
-        // Alleen verhogen als we geen actieve spraak hebben
         if (!this.isListening) {
           this.noMatchCount++;
         }
       };
 
-      // Verwijder speechend/soundend handlers om automatische stop te voorkomen
-      this.recognition.onaudiostart = () => {
-        console.debug('[Speech] Audio started');
-      };
-
+      this.recognition.onaudiostart = () => {};
       this.recognition.onaudioend = () => {
-        console.debug('[Speech] Audio ended');
-        // Direct herstarten bij audio end als we niet handmatig gestopt zijn
-        if (!this.manualStop && this.isListening) {
+        if (!this.manualStop && this.isListening && 
+            this.deviceDetection.getDeviceType() === 'mobile' && 
+            this.deviceDetection.getBrowserType() === 'chrome') {
           setTimeout(() => {
-            this.recognition?.start();
-          }, 100);
+            if (!this.manualStop && this.isListening) {
+              try {
+                this.recognition?.start();
+              } catch (error) {
+                DebugLogger.error('[Speech] Audio restart error:', error);
+              }
+            }
+          }, this.RESTART_DELAY);
         }
       };
 
-      this.recognition.onsoundstart = () => {
-        console.debug('[Speech] Sound started');
-      };
-
-      this.recognition.onsoundend = () => {
-        console.debug('[Speech] Sound ended');
-      };
-
-      this.recognition.onspeechstart = () => {
-        console.debug('[Speech] Speech started');
-      };
-
-      this.recognition.onspeechend = () => {
-        console.debug('[Speech] Speech ended');
-        // Negeer speech end events tenzij we handmatig gestopt zijn
-      };
+      this.recognition.onsoundstart = () => {};
+      this.recognition.onsoundend = () => {};
+      this.recognition.onspeechstart = () => {};
+      this.recognition.onspeechend = () => {};
     }
   }
 
   public startListening(onResult: (text: string) => void, onError?: (error: string) => void): void {
-    console.debug('[Speech] Starting recognition');
     this.isListening = true;
     this.noMatchCount = 0;
+    this.consecutiveRestarts = 0;
     if (this.shouldResetText) {
-      console.debug('[Speech] Resetting accumulated text');
       this.accumulatedText = '';
     }
     this.shouldResetText = true;
     this.manualStop = false;
     this.config.onResult = onResult;
     this.config.onError = onError;
-    this.recognition?.start();
+    
+    try {
+      this.recognition?.start();
+    } catch (error) {
+      DebugLogger.error('[Speech] Start error:', error);
+      this.config.onError?.('Fout bij starten van spraakherkenning');
+      this.isListening = false;
+    }
   }
 
   public stopListening(): void {
-    console.debug('[Speech] Stopping recognition');
     this.manualStop = true;
     this.isListening = false;
     this.shouldResetText = true;
@@ -210,10 +208,10 @@ export class SpeechRecognitionService {
   public isSupported(): boolean {
     try {
       const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-      console.debug('[Speech] Support check:', supported);
+      DebugLogger.log('[Speech] Support check:', supported);
       return supported;
     } catch (error) {
-      console.error('[Speech] Support check error:', error);
+      DebugLogger.error('[Speech] Support check error:', error);
       return false;
     }
   }
