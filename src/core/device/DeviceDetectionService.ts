@@ -5,12 +5,31 @@ export class DeviceDetectionService {
   private platform = navigator.platform;
 
   isMobile(): boolean {
-    const result = this.hasMobileUserAgent() && 
-      this.hasTouchCapability() && 
-      window.innerWidth <= 768;
-      
-    console.log('Device Detection:', {
+    // Eerst check voor specifieke mobiele/tablet devices
+    const isAndroid = /Android/i.test(this.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(this.platform) || 
+      (this.platform === 'MacIntel' && navigator.maxTouchPoints > 0);
+    const isSamsung = /SM-|SAMSUNG|Samsung/i.test(this.userAgent);
+
+    // Als het een bekend mobiel device is, altijd true
+    if (isAndroid || isIOS || isSamsung) {
+      console.log('Device Detection - Known Mobile:', {
+        isAndroid,
+        isIOS,
+        isSamsung,
+        userAgent: this.userAgent,
+        platform: this.platform
+      });
+      return true;
+    }
+
+    // Fallback voor andere devices
+    const result = this.hasMobileUserAgent() || 
+      (this.hasTouchCapability() && window.innerWidth <= 1024);
+    
+    console.log('Device Detection - Fallback:', {
       userAgent: this.userAgent,
+      platform: this.platform,
       hasMobileUA: this.hasMobileUserAgent(),
       hasTouch: this.hasTouchCapability(),
       width: window.innerWidth,
@@ -41,17 +60,11 @@ export class DeviceDetectionService {
   }
 
   private hasMobileUserAgent(): boolean {
-    const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
-    return mobileRegex.test(this.userAgent);
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(this.userAgent);
   }
 
   private hasTouchCapability(): boolean {
-    return (
-      'ontouchstart' in window ||
-      navigator.maxTouchPoints > 0 ||
-      // @ts-ignore - voor oude IE/Edge browsers
-      navigator.msMaxTouchPoints > 0
-    );
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   }
 
   private getBrowserType(): BrowserType {
