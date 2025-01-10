@@ -35,11 +35,26 @@ export class SpeechRecognitionService {
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetectionService = deviceDetection || new DeviceDetectionService();
     this.config = createSpeechConfig(this.deviceDetectionService);
+    
+    // Log config bij initialisatie
+    console.log('Speech Service Config:', {
+      isMobile: this.deviceDetectionService.isMobile(),
+      browser: this.deviceDetectionService.getBrowserInfo(),
+      capabilities: this.deviceDetectionService.getSpeechRecognitionCapabilities(),
+      config: this.config
+    });
+    
     this.initializeRecognition();
   }
 
   private initializeRecognition(): void {
     try {
+      console.log('Speech Recognition Init:', {
+        hasWebkit: !!window.webkitSpeechRecognition,
+        hasSpeechRecognition: !!window.SpeechRecognition,
+        userAgent: navigator.userAgent
+      });
+
       const SpeechRecognitionImpl = (
         window.SpeechRecognition ||
         window.webkitSpeechRecognition
@@ -50,9 +65,10 @@ export class SpeechRecognitionService {
       }
 
       this.recognition = new SpeechRecognitionImpl();
+      console.log('Recognition created successfully');
       this.setupRecognition();
     } catch (error) {
-      console.error('Speech Recognition initialisatie mislukt:', error);
+      console.error('Speech Recognition init error:', error);
     }
   }
 
@@ -148,9 +164,18 @@ export class SpeechRecognitionService {
   }
 
   public startListening(): void {
-    if (!this.recognition) return;
+    if (!this.recognition) {
+      console.error('Recognition not initialized');
+      return;
+    }
 
     try {
+      console.log('Starting recognition:', {
+        state: this.state,
+        isMobile: this.deviceDetectionService.isMobile(),
+        continuous: this.recognition.continuous,
+        interimResults: this.recognition.interimResults
+      });
       // Check huidige state
       if (this.state === 'LISTENING') {
         console.debug('Recognition already listening, ignoring start request');
@@ -303,6 +328,19 @@ export class SpeechRecognitionService {
       console.debug('Appending text:', text, 'Current:', this.currentText);
       this.currentText = this.currentText ? `${this.currentText} ${text}` : text;
       this.config.onResult?.(this.currentText, true);
+    }
+  }
+
+  async checkPermissions() {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      console.log('Microphone Permission:', {
+        state: result.state,
+        platform: navigator.platform,
+        userAgent: navigator.userAgent
+      });
+    } catch (error) {
+      console.error('Permission check failed:', error);
     }
   }
 } 

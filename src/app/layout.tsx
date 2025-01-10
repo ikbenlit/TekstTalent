@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon.ico' },
+      { url: '/images/icons/favicon.ico' },
       { url: '/images/icons/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
       { url: '/images/icons/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
     ],
@@ -24,29 +24,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="nl">
-      <head>
-        <link 
-          rel="apple-touch-icon" 
-          sizes="180x180" 
-          href="/images/icons/apple-touch-icon.png"
-        />
-        <link 
-          rel="icon" 
-          type="image/png" 
-          sizes="32x32" 
-          href="/images/icons/favicon-32x32.png"
-        />
-        <link 
-          rel="icon" 
-          type="image/png" 
-          sizes="16x16" 
-          href="/images/icons/favicon-16x16.png"
-        />
-        <link 
-          rel="manifest" 
-          href="/images/icons/site.webmanifest"
-        />
-      </head>
       <body className="bg-white">
         {children}
       </body>

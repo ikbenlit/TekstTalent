@@ -5,11 +5,19 @@ export class DeviceDetectionService {
   private platform = navigator.platform;
 
   isMobile(): boolean {
-    return (
-      this.hasMobileUserAgent() &&
-      this.hasTouchCapability() &&
-      window.innerWidth <= 768
-    );
+    const result = this.hasMobileUserAgent() && 
+      this.hasTouchCapability() && 
+      window.innerWidth <= 768;
+      
+    console.log('Device Detection:', {
+      userAgent: this.userAgent,
+      hasMobileUA: this.hasMobileUserAgent(),
+      hasTouch: this.hasTouchCapability(),
+      width: window.innerWidth,
+      isMobile: result
+    });
+    
+    return result;
   }
 
   getBrowserInfo() {

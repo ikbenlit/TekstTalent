@@ -52,7 +52,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </footer>
       </div>
-      {process.env.NODE_ENV !== 'production' && <DebugLog />}
+      <DebugLog />
     </div>
   );
 }; 
