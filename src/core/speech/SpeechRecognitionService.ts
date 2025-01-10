@@ -81,14 +81,23 @@ export class SpeechRecognitionService {
       // Mobiel-specifieke setup
       if (this.deviceDetectionService.isMobile()) {
         this.recognition!.continuous = false;
-        this.recognition!.interimResults = true;
-        // maxAlternatives is not supported in the standard SpeechRecognition type
+        this.recognition!.interimResults = false;
+        this.recognition!.lang = 'nl-NL';
+        
+        // Add mobile-specific timeouts
+        if (this.timeoutId) {
+          clearTimeout(this.timeoutId);
+        }
+        this.timeoutId = window.setTimeout(() => {
+          console.log('Mobile timeout reached, stopping...');
+          this.stopListening();
+        }, 10000);  // 10 second timeout
       } else {
+        // Desktop setup blijft hetzelfde
         this.recognition!.continuous = this.config.continuous;
         this.recognition!.interimResults = true;
+        this.recognition!.lang = 'nl-NL';
       }
-      
-      this.recognition!.lang = 'nl-NL';
 
       // Start handler met extra mobiele checks
       this.recognition!.onstart = () => {
@@ -284,7 +293,9 @@ export class SpeechRecognitionService {
 
   private handleNoSpeechError(): void {
     if (this.deviceDetectionService.isMobile()) {
-      this.retryWithDelay(300);
+      console.log('Handling no-speech error on mobile');
+      // Langere delay voor mobiel
+      this.retryWithDelay(1000);
     }
   }
 
