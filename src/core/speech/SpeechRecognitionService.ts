@@ -26,8 +26,7 @@ export class SpeechRecognitionService {
   private noMatchCount: number = 0;
   private readonly MAX_NO_MATCH_RETRIES = 2;
   private shouldResetText: boolean = true;
-  private speechEndTimeout: number | null = null;
-  private readonly SPEECH_END_DELAY = 5000; // 5 seconden wachten bij stilte
+  private manualStop: boolean = false;
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
@@ -49,53 +48,36 @@ export class SpeechRecognitionService {
         deviceType: this.deviceDetection.getDeviceType(),
         browserType: this.deviceDetection.getBrowserType(),
         continuous: config.continuous,
-        interimResults: config.interimResults,
-        speechEndDelay: this.SPEECH_END_DELAY
+        interimResults: config.interimResults
       });
 
       this.recognition.onstart = () => {
         console.debug('[Speech] Recognition started');
         this.isListening = true;
-      };
-
-      this.recognition.onspeechend = () => {
-        console.debug('[Speech] Speech ended');
-        // Start timer voor vertraagde stop
-        if (this.speechEndTimeout) {
-          window.clearTimeout(this.speechEndTimeout);
-        }
-        this.speechEndTimeout = window.setTimeout(() => {
-          console.debug('[Speech] Speech end timeout reached');
-          this.recognition?.stop();
-        }, this.SPEECH_END_DELAY);
-      };
-
-      this.recognition.onspeechstart = () => {
-        console.debug('[Speech] Speech started');
-        // Cancel eventuele lopende timer
-        if (this.speechEndTimeout) {
-          window.clearTimeout(this.speechEndTimeout);
-          this.speechEndTimeout = null;
-        }
+        this.manualStop = false;
       };
 
       this.recognition.onend = () => {
         console.debug('[Speech] Recognition ended');
 
-        // Alleen stoppen met luisteren als we te veel no-matches hebben of handmatig stoppen
-        if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
-          console.debug('[Speech] Stopping due to too many no-matches');
+        // Alleen stoppen als het handmatig is of bij te veel no-matches
+        if (this.manualStop || this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
+          console.debug('[Speech] Stopping due to manual stop or too many no-matches');
           this.isListening = false;
-          this.config.onError?.('Geen spraak gedetecteerd');
-          this.shouldResetText = true; // Reset tekst bij volgende start
+          if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
+            this.config.onError?.('Geen spraak gedetecteerd');
+          }
+          this.shouldResetText = true;
         } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
             this.deviceDetection.getBrowserType() === 'chrome' &&
             this.isListening) {
           console.debug('[Speech] Auto-restarting for mobile Chrome');
-          this.shouldResetText = false; // Behoud tekst voor volgende sessie
+          this.shouldResetText = false;
           setTimeout(() => {
-            this.recognition?.start();
-          }, 100); // Kleine vertraging om de browser tijd te geven
+            if (!this.manualStop) {
+              this.recognition?.start();
+            }
+          }, 100);
         } else {
           this.isListening = false;
         }
@@ -156,7 +138,8 @@ export class SpeechRecognitionService {
           timeStamp: event.timeStamp
         });
         this.config.onError?.(event.error);
-        this.shouldResetText = true; // Reset tekst bij error
+        this.shouldResetText = true;
+        this.manualStop = true; // Stop bij errors
         this.stopListening();
       };
 
@@ -165,6 +148,7 @@ export class SpeechRecognitionService {
         this.noMatchCount++;
       };
 
+      // Verwijder de speechend handler, we willen niet automatisch stoppen
       this.recognition.onaudiostart = () => {
         console.debug('[Speech] Audio started');
       };
@@ -180,6 +164,14 @@ export class SpeechRecognitionService {
       this.recognition.onsoundend = () => {
         console.debug('[Speech] Sound ended');
       };
+
+      this.recognition.onspeechstart = () => {
+        console.debug('[Speech] Speech started');
+      };
+
+      this.recognition.onspeechend = () => {
+        console.debug('[Speech] Speech ended');
+      };
     }
   }
 
@@ -191,7 +183,8 @@ export class SpeechRecognitionService {
       console.debug('[Speech] Resetting accumulated text');
       this.accumulatedText = '';
     }
-    this.shouldResetText = true; // Standaard resetten bij volgende keer
+    this.shouldResetText = true;
+    this.manualStop = false;
     this.config.onResult = onResult;
     this.config.onError = onError;
     this.recognition?.start();
@@ -199,8 +192,9 @@ export class SpeechRecognitionService {
 
   public stopListening(): void {
     console.debug('[Speech] Stopping recognition');
+    this.manualStop = true;
     this.isListening = false;
-    this.shouldResetText = true; // Reset tekst bij volgende start
+    this.shouldResetText = true;
     this.recognition?.stop();
   }
 
