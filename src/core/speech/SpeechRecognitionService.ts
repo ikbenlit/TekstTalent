@@ -92,29 +92,38 @@ export class SpeechRecognitionService {
 
       // Mobiel-specifieke setup
       if (this.deviceDetectionService.isMobile()) {
+        // Basis configuratie voor mobiel
         this.recognition!.continuous = false;
-        this.recognition!.interimResults = true;
+        this.recognition!.interimResults = false;  // Zet uit voor mobiel
         this.recognition!.lang = 'nl-NL';
 
-        // Mobiele result handler
+        // Mobiele result handler - vereenvoudigd
         this.recognition!.onresult = (event: SpeechRecognitionEvent) => {
-          console.log('Mobile result:', {
-            resultsLength: event.results.length,
-            isFinal: event.results[event.results.length - 1]?.isFinal,
-            timestamp: new Date().toISOString()
-          });
-
-          if (event.results.length > 0) {
+          console.log('Mobile result received');
+          
+          try {
             const result = event.results[event.results.length - 1];
+            console.log('Processing mobile result:', {
+              isFinal: result.isFinal,
+              transcript: result[0].transcript,
+              confidence: result[0].confidence
+            });
+
             if (result.isFinal) {
-              const firstAlternative = result[0] as SpeechRecognitionAlternative;
-              this.appendText(firstAlternative.transcript);
-              this.stopListening();
+              this.appendText(result[0].transcript);
+              
+              // Wacht even voordat we stoppen
+              setTimeout(() => {
+                this.stopListening();
+                this.retryCount = 0;  // Reset retry count na succesvol resultaat
+              }, 500);
             }
+          } catch (error) {
+            console.error('Error processing mobile result:', error);
           }
         };
 
-        // Mobiele error handler
+        // Mobiele error handler - meer specifiek
         this.recognition!.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error('Mobile Speech Error:', {
             error: event.error,
@@ -122,8 +131,12 @@ export class SpeechRecognitionService {
             state: this.state,
             retryCount: this.retryCount
           });
-          if (event.error === 'no-speech' || event.error === 'network') {
-            this.retryWithDelay(1000);
+
+          // Alleen retry bij specifieke errors en als we nog niet te vaak hebben geprobeerd
+          if ((event.error === 'no-speech' || event.error === 'network') && 
+              this.retryCount < this.config.maxRetries) {
+            console.log(`Retrying on mobile (attempt ${this.retryCount + 1}/${this.config.maxRetries})`);
+            this.retryWithDelay(1500);  // Langere delay
           } else {
             this.handleError(event);
           }
@@ -166,16 +179,10 @@ export class SpeechRecognitionService {
         const wasListening = this.state === 'LISTENING';
         this.setState('IDLE');
         
-        if (wasListening) {
-          if (this.deviceDetectionService.isMobile()) {
-            if (this.retryCount < this.config.maxRetries) {
-              console.log('Retrying on mobile...');
-              setTimeout(() => this.startListening(), 1000);
-            }
-          } else {
-            console.log('Auto-restarting on desktop');
-            setTimeout(() => this.startListening(), 100);
-          }
+        // Alleen auto-restart op desktop
+        if (wasListening && !this.deviceDetectionService.isMobile()) {
+          console.log('Auto-restarting on desktop');
+          setTimeout(() => this.startListening(), 100);
         }
         
         this.config.onSpeechEnd?.();
