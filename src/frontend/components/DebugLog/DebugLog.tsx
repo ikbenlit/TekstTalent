@@ -31,17 +31,35 @@ export const DebugLog = () => {
     };
   }, []);
 
+  const copyLogs = async () => {
+    try {
+      const logText = logs.join('\n');
+      await navigator.clipboard.writeText(logText);
+      console.log('Logs copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy logs:', error);
+    }
+  };
+
   if (!isVisible) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-white p-4 max-h-48 overflow-auto z-50">
-      <button 
-        onClick={() => setIsVisible(false)}
-        className="absolute top-2 right-2 text-xs bg-red-500 px-2 py-1 rounded"
-      >
-        Close
-      </button>
-      <div className="space-y-1">
+      <div className="absolute top-2 right-2 flex gap-2">
+        <button 
+          onClick={copyLogs}
+          className="text-xs bg-blue-500 px-2 py-1 rounded hover:bg-blue-600"
+        >
+          Copy Logs
+        </button>
+        <button 
+          onClick={() => setIsVisible(false)}
+          className="text-xs bg-red-500 px-2 py-1 rounded hover:bg-red-600"
+        >
+          Close
+        </button>
+      </div>
+      <div className="space-y-1 mt-6">
         {logs.map((log, i) => (
           <div key={i} className="text-xs font-mono whitespace-pre-wrap">{log}</div>
         ))}

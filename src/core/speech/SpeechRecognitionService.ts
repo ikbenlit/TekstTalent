@@ -78,38 +78,55 @@ export class SpeechRecognitionService {
     this.checkPermissions().then(async () => {
       console.log('Setting up recognition after permission check');
       
-      this.recognition!.continuous = this.deviceDetectionService.isMobile() 
-        ? false  // Force false alleen op mobiel
-        : this.config.continuous;  // Gebruik config voor desktop
+      // Mobiel-specifieke setup
+      if (this.deviceDetectionService.isMobile()) {
+        this.recognition!.continuous = false;
+        this.recognition!.interimResults = true;
+        // maxAlternatives is not supported in the standard SpeechRecognition type
+      } else {
+        this.recognition!.continuous = this.config.continuous;
+        this.recognition!.interimResults = true;
+      }
       
-      this.recognition!.interimResults = true;
       this.recognition!.lang = 'nl-NL';
-      
-      // Start handler
+
+      // Start handler met extra mobiele checks
       this.recognition!.onstart = () => {
         console.log('Recognition started:', {
           state: this.state,
           continuous: this.recognition?.continuous,
-          interimResults: this.recognition?.interimResults
+          interimResults: this.recognition?.interimResults,
+          isMobile: this.deviceDetectionService.isMobile()
         });
         this.setState('LISTENING');
         this.config.onSpeechStart?.();
       };
 
-      // End handler
+      // End handler met retry voor mobiel
       this.recognition!.onend = () => {
         console.log('Recognition ended:', {
           state: this.state,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isMobile: this.deviceDetectionService.isMobile(),
+          retryCount: this.retryCount
         });
         
         const wasListening = this.state === 'LISTENING';
         this.setState('IDLE');
-        
-        // Auto-restart voor desktop
-        if (!this.deviceDetectionService.isMobile() && wasListening) {
-          console.log('Auto-restarting on desktop');
-          setTimeout(() => this.startListening(), 100);
+
+        // Auto-restart logica
+        if (wasListening) {
+          if (this.deviceDetectionService.isMobile()) {
+            // Op mobiel: probeer opnieuw met delay
+            if (this.retryCount < this.config.maxRetries) {
+              console.log('Retrying on mobile...');
+              setTimeout(() => this.startListening(), 500);
+            }
+          } else {
+            // Op desktop: direct herstarten
+            console.log('Auto-restarting on desktop');
+            setTimeout(() => this.startListening(), 100);
+          }
         }
         
         this.config.onSpeechEnd?.();
