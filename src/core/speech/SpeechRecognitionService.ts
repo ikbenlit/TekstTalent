@@ -75,77 +75,78 @@ export class SpeechRecognitionService {
   private setupRecognition(): void {
     if (!this.recognition) return;
 
-    console.debug('Mobile Setup:', {
-      isMobile: this.deviceDetectionService.isMobile(),
-      browser: this.deviceDetectionService.getBrowserInfo(),
-      config: {
-        continuous: this.config.continuous,
-        interimResults: this.config.interimResults,
-        lang: this.config.lang
-      }
-    });
-
-    this.recognition.continuous = this.config.continuous;
-    this.recognition.interimResults = this.config.interimResults;
-    this.recognition.lang = this.config.lang;
-
-    this.recognition.onstart = () => {
-      console.debug('Recognition started on mobile');
-      this.setState('LISTENING');
-      this.config.onSpeechStart?.();
-    };
-
-    this.recognition.onend = () => {
-      console.debug('Recognition ended on mobile');
-      const wasListening = this.state === 'LISTENING';
-      this.setState('IDLE');
+    this.checkPermissions().then(async () => {
+      console.log('Setting up recognition after permission check');
       
-      // Op desktop, als we niet handmatig gestopt zijn, direct herstarten
-      if (!this.deviceDetectionService.isMobile() && wasListening) {
-        console.debug('Auto-restarting recognition on desktop');
-        setTimeout(() => {
-          this.startListening();
-        }, 100);
-      }
+      this.recognition!.continuous = this.deviceDetectionService.isMobile() 
+        ? false  // Force false alleen op mobiel
+        : this.config.continuous;  // Gebruik config voor desktop
       
-      this.config.onSpeechEnd?.();
-    };
+      this.recognition!.interimResults = true;
+      this.recognition!.lang = 'nl-NL';
+      
+      // Start handler
+      this.recognition!.onstart = () => {
+        console.log('Recognition started:', {
+          state: this.state,
+          continuous: this.recognition?.continuous,
+          interimResults: this.recognition?.interimResults
+        });
+        this.setState('LISTENING');
+        this.config.onSpeechStart?.();
+      };
 
-    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Log resultaten voor debugging
-      console.debug('Speech result:', {
-        isMobile: this.deviceDetectionService.isMobile(),
-        resultsLength: event.results.length,
-        resultIndex: event.resultIndex,
-        timestamp: new Date().toISOString()
-      });
-
-      this.lastSpeechTimestamp = Date.now();
-
-      if (event.results.length > 0) {
-        const result = event.results[event.results.length - 1];
-        if (result.isFinal) {
-          const firstAlternative = result[0] as SpeechRecognitionAlternative;
-          const transcript = firstAlternative.transcript;
-          console.debug('Got final transcript:', {
-            transcript,
-            confidence: firstAlternative.confidence,
-            isMobile: this.deviceDetectionService.isMobile()
-          });
-          this.appendText(transcript);
+      // End handler
+      this.recognition!.onend = () => {
+        console.log('Recognition ended:', {
+          state: this.state,
+          timestamp: new Date().toISOString()
+        });
+        
+        const wasListening = this.state === 'LISTENING';
+        this.setState('IDLE');
+        
+        // Auto-restart voor desktop
+        if (!this.deviceDetectionService.isMobile() && wasListening) {
+          console.log('Auto-restarting on desktop');
+          setTimeout(() => this.startListening(), 100);
         }
-      }
-    };
+        
+        this.config.onSpeechEnd?.();
+      };
 
-    // Log errors met meer context
-    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Mobile Speech Error:', {
-        error: event.error,
-        message: event.message,
-        state: this.state
-      });
-      this.handleError(event);
-    };
+      // Result handler
+      this.recognition!.onresult = (event: SpeechRecognitionEvent) => {
+        console.log('Got result:', {
+          resultsLength: event.results.length,
+          isFinal: event.results[event.results.length - 1]?.isFinal
+        });
+
+        if (event.results.length > 0) {
+          const result = event.results[event.results.length - 1];
+          if (result.isFinal) {
+            const firstAlternative = result[0] as SpeechRecognitionAlternative;
+            this.appendText(firstAlternative.transcript);
+          }
+        }
+      };
+
+      // Error handler
+      this.recognition!.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech Error Details:', {
+          error: event.error,
+          message: event.message,
+          state: this.state,
+          timestamp: new Date().toISOString(),
+          recognition: {
+            continuous: this.recognition?.continuous,
+            interimResults: this.recognition?.interimResults,
+            lang: this.recognition?.lang
+          }
+        });
+        this.handleError(event);
+      };
+    });
   }
 
   public start(onResult: (text: string) => void, onError?: (error: string) => void): void {
