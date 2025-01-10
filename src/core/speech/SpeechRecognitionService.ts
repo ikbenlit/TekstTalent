@@ -59,6 +59,14 @@ export class SpeechRecognitionService {
   private setupRecognition(): void {
     if (!this.recognition) return;
 
+    // Log config bij setup
+    console.debug('Setting up recognition with config:', {
+      isMobile: this.deviceDetectionService.isMobile(),
+      continuous: this.config.continuous,
+      interimResults: this.config.interimResults,
+      lang: this.config.lang
+    });
+
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
@@ -86,6 +94,14 @@ export class SpeechRecognitionService {
     };
 
     this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Log resultaten voor debugging
+      console.debug('Speech result:', {
+        isMobile: this.deviceDetectionService.isMobile(),
+        resultsLength: event.results.length,
+        resultIndex: event.resultIndex,
+        timestamp: new Date().toISOString()
+      });
+
       this.lastSpeechTimestamp = Date.now();
 
       if (event.results.length > 0) {
@@ -93,13 +109,25 @@ export class SpeechRecognitionService {
         if (result.isFinal) {
           const firstAlternative = result[0] as SpeechRecognitionAlternative;
           const transcript = firstAlternative.transcript;
-          console.debug('Got final transcript:', transcript);
+          console.debug('Got final transcript:', {
+            transcript,
+            confidence: firstAlternative.confidence,
+            isMobile: this.deviceDetectionService.isMobile()
+          });
           this.appendText(transcript);
         }
       }
     };
 
-    this.recognition.onerror = this.handleError.bind(this);
+    // Log errors met meer context
+    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.debug('Speech error:', {
+        error: event.error,
+        message: event.message,
+        isMobile: this.deviceDetectionService.isMobile()
+      });
+      this.handleError(event);
+    };
   }
 
   public start(onResult: (text: string) => void, onError?: (error: string) => void): void {
