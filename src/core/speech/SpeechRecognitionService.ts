@@ -83,15 +83,40 @@ export class SpeechRecognitionService {
           this.noMatchCount = 0;
           this.consecutiveRestarts++;
           
+          // Add delay and check state before restart
           setTimeout(() => {
             if (!this.manualStop && this.isListening) {
               try {
-                this.recognition?.start();
-              } catch (error) {
-                DebugLogger.error('[Speech] Restart error:', error);
-                this.config.onError?.('Fout bij herstarten van spraakherkenning');
-                this.manualStop = true;
-                this.isListening = false;
+                // Check if recognition is already running
+                if (this.recognition) {
+                  try {
+                    this.recognition.stop();
+                  } catch (stopError) {
+                    // Ignore stop errors
+                  }
+                  
+                  // Add small delay before restart
+                  setTimeout(() => {
+                    try {
+                      this.recognition?.start();
+                    } catch (startError: any) {
+                      DebugLogger.error('[Speech] Delayed restart error:', startError?.message || startError);
+                      // Only trigger error if it's not already stopped
+                      if (this.isListening) {
+                        this.config.onError?.('Fout bij herstarten van spraakherkenning');
+                        this.manualStop = true;
+                        this.isListening = false;
+                      }
+                    }
+                  }, 100);
+                }
+              } catch (error: any) {
+                DebugLogger.error('[Speech] Restart error:', error?.message || error);
+                if (this.isListening) {
+                  this.config.onError?.('Fout bij herstarten van spraakherkenning');
+                  this.manualStop = true;
+                  this.isListening = false;
+                }
               }
             }
           }, this.RESTART_DELAY);
