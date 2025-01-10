@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import { CopyButton } from '../CopyButton/CopyButton';
-import { Image } from 'lucide-react';
 
 interface ImageSectionProps {
   imageUrl: string | null;
   isGeneratingImage?: boolean;
-  onGenerateImage: () => void;
+  onGenerateImage?: () => void;
   text?: string;
   isTransforming?: boolean;
 }
 
 export const ImageSection: React.FC<ImageSectionProps> = ({ 
   imageUrl, 
-  isGeneratingImage,
-  onGenerateImage,
-  text,
-  isTransforming 
+  isGeneratingImage
 }) => {
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -32,7 +28,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
             <>
               <img 
                 src={imageUrl} 
-                alt="Gegenereerde afbeelding" 
+                alt="Gegenereerde afbeelding op basis van de tekst"
                 className="w-full h-auto rounded-md" 
                 onError={handleImageError}
                 style={{ display: imageError ? 'none' : 'block' }}

@@ -1,298 +1,340 @@
-import type { 
-  SpeechRecognition as CustomSpeechRecognition,
-  SpeechRecognitionEvent as CustomSpeechRecognitionEvent,
-  SpeechRecognitionConstructor
-} from '@/types/speech.types';
-
 import { SpeechConfig } from '@/config/speech.config';
 import { DeviceDetectionService } from '@/core/device/DeviceDetectionService';
 import { DebugLogger } from '@/core/utils/DebugLogger';
 
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
-
-// Definieer state als union type
-type RecognitionState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'ERROR';
-
 export class SpeechRecognitionService {
-  private recognition: SpeechRecognition | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+  private isRecording: boolean = false;
+  private isPaused: boolean = false;
   private config: SpeechConfig = {};
   private deviceDetection: DeviceDetectionService;
-  private accumulatedText: string = '';
-  private isListening: boolean = false;
-  private noMatchCount: number = 0;
-  private readonly MAX_NO_MATCH_RETRIES = 2;
-  private shouldResetText: boolean = true;
-  private manualStop: boolean = false;
-  private readonly RESTART_DELAY = 500; // Increased delay for mobile devices
-  private readonly RESTART_INTERVAL = 100; // Delay between stop and start
-  private consecutiveRestarts = 0;
-  private readonly MAX_CONSECUTIVE_RESTARTS = 3; // Reduced max restarts to prevent errors
-  private isRestarting = false; // New flag to track restart state
+  private recordingInterval: NodeJS.Timeout | null = null;
+  private silenceTimeout: NodeJS.Timeout | null = null;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private mediaStreamSource: MediaStreamAudioSourceNode | null = null;
+  private stream: MediaStream | null = null;
+  private readonly MAX_RECORDING_TIME = 60000; // 60 seconden maximum
+  private readonly SILENCE_THRESHOLD = -50; // dB
+  private readonly SILENCE_DURATION = 2000; // 2 seconden stilte voordat we stoppen
 
   constructor(deviceDetection?: DeviceDetectionService) {
     this.deviceDetection = deviceDetection || new DeviceDetectionService();
-    
-    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionConstructor) {
-      DebugLogger.log('[Speech] No recognition available');
-      throw new Error('Speech Recognition niet beschikbaar');
-    }
-
-    this.recognition = new SpeechRecognitionConstructor();
-    if (this.recognition) {
-      const config = this.deviceDetection.getSpeechRecognitionConfig();
-      this.recognition.continuous = config.continuous;
-      this.recognition.interimResults = config.interimResults;
-      this.recognition.lang = 'nl-NL';
-      this.recognition.maxAlternatives = 1;
-      
-      DebugLogger.log('[Speech] Init:', {
-        device: this.deviceDetection.getDeviceType(),
-        browser: this.deviceDetection.getBrowserType()
-      });
-
-      this.recognition.onstart = () => {
-        this.isListening = true;
-        this.manualStop = false;
-      };
-
-      this.recognition.onend = () => {
-        // Alleen stoppen bij handmatige stop of te veel no-matches
-        if (this.manualStop || this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
-          this.isListening = false;
-          if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
-            this.config.onError?.('Geen spraak gedetecteerd');
-          }
-          this.shouldResetText = true;
-          this.consecutiveRestarts = 0;
-          this.isRestarting = false;
-        } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
-            this.deviceDetection.getBrowserType() === 'chrome') {
-          
-          // Speciale behandeling voor Android
-          if (this.deviceDetection.isAndroid()) {
-            // Voor Android: wacht langer en gebruik één enkele herstart
-            if (this.consecutiveRestarts >= 1) {
-              DebugLogger.log('[Speech] Android restart limit reached');
-              this.manualStop = true;
-              this.isListening = false;
-              this.isRestarting = false;
-              return;
-            }
-
-            if (this.isRestarting) {
-              return;
-            }
-
-            this.isRestarting = true;
-            this.consecutiveRestarts++;
-
-            // Langere delay voor Android
-            setTimeout(() => {
-              if (!this.manualStop && this.isListening) {
-                try {
-                  this.recognition?.start();
-                  this.isRestarting = false;
-                } catch (error) {
-                  DebugLogger.error('[Speech] Android restart error:', error);
-                  this.isRestarting = false;
-                  this.manualStop = true;
-                  this.isListening = false;
-                }
-              } else {
-                this.isRestarting = false;
-              }
-            }, 1000); // Langere delay voor Android
-            return;
-          }
-
-          // Bestaande logica voor andere mobiele browsers
-          if (this.consecutiveRestarts >= this.MAX_CONSECUTIVE_RESTARTS) {
-            DebugLogger.log('[Speech] Max restarts reached');
-            this.manualStop = true;
-            this.isListening = false;
-            this.isRestarting = false;
-            this.config.onError?.('Te veel herstart pogingen');
-            return;
-          }
-
-          if (this.isRestarting) {
-            DebugLogger.log('[Speech] Already restarting, skipping...');
-            return;
-          }
-
-          this.shouldResetText = false;
-          this.noMatchCount = 0;
-          this.consecutiveRestarts++;
-          this.isRestarting = true;
-          
-          // Add delay and check state before restart
-          setTimeout(() => {
-            if (!this.manualStop && this.isListening) {
-              try {
-                // Check if recognition is already running
-                if (this.recognition) {
-                  try {
-                    this.recognition.stop();
-                  } catch (stopError) {
-                    // Ignore stop errors
-                  }
-                  
-                  // Add longer delay before restart for Android
-                  setTimeout(() => {
-                    try {
-                      if (!this.manualStop && this.isListening) {
-                        this.recognition?.start();
-                        this.isRestarting = false;
-                      }
-                    } catch (startError: any) {
-                      DebugLogger.error('[Speech] Delayed restart error:', startError?.message || startError);
-                      // Only trigger error if it's not already stopped
-                      if (this.isListening) {
-                        this.config.onError?.('Fout bij herstarten van spraakherkenning');
-                        this.manualStop = true;
-                        this.isListening = false;
-                      }
-                      this.isRestarting = false;
-                    }
-                  }, this.RESTART_INTERVAL);
-                }
-              } catch (error: any) {
-                DebugLogger.error('[Speech] Restart error:', error?.message || error);
-                if (this.isListening) {
-                  this.config.onError?.('Fout bij herstarten van spraakherkenning');
-                  this.manualStop = true;
-                  this.isListening = false;
-                }
-                this.isRestarting = false;
-              }
-            } else {
-              this.isRestarting = false;
-            }
-          }, this.RESTART_DELAY);
-        }
-      };
-      
-      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const result = event.results[event.results.length - 1];
-        
-        // Reset no-match teller bij een geldig resultaat
-        this.noMatchCount = 0;
-        
-        if (this.deviceDetection.getDeviceType() === 'mobile' && 
-            this.deviceDetection.getBrowserType() === 'chrome') {
-          // Specifieke logica voor mobiele Chrome
-          if (result.isFinal) {
-            let transcript = result[0].transcript.trim();
-            
-            // Zorg dat de eerste letter een hoofdletter is
-            if (transcript.length > 0) {
-              transcript = transcript.charAt(0).toUpperCase() + transcript.slice(1).toLowerCase();
-            }
-            
-            if (this.accumulatedText && !this.shouldResetText) {
-              // Check of de vorige zin eindigt met leesteken
-              const hasEndPunctuation = /[.!?]$/.test(this.accumulatedText);
-              if (!hasEndPunctuation) {
-                this.accumulatedText += '. ';
-              } else {
-                this.accumulatedText += ' ';
-              }
-              this.accumulatedText += transcript;
-            } else {
-              this.accumulatedText = transcript;
-            }
-            
-            this.config.onResult?.(this.accumulatedText.trim());
-          }
-        } else {
-          // Standaard logica voor andere apparaten
-          if (result.isFinal) {
-            const transcript = result[0].transcript;
-            this.config.onResult?.(transcript);
-          }
-        }
-      };
-
-      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        DebugLogger.error('[Speech] Error:', event.error);
-        this.config.onError?.(event.error);
-        this.shouldResetText = true;
-        this.manualStop = true;
-        this.stopListening();
-      };
-
-      this.recognition.onnomatch = () => {
-        if (!this.isListening) {
-          this.noMatchCount++;
-        }
-      };
-
-      this.recognition.onaudiostart = () => {};
-      this.recognition.onaudioend = () => {
-        if (!this.manualStop && this.isListening && 
-            this.deviceDetection.getDeviceType() === 'mobile' && 
-            this.deviceDetection.getBrowserType() === 'chrome') {
-          setTimeout(() => {
-            if (!this.manualStop && this.isListening) {
-              try {
-                this.recognition?.start();
-              } catch (error) {
-                DebugLogger.error('[Speech] Audio restart error:', error);
-              }
-            }
-          }, this.RESTART_DELAY);
-        }
-      };
-
-      this.recognition.onsoundstart = () => {};
-      this.recognition.onsoundend = () => {};
-      this.recognition.onspeechstart = () => {};
-      this.recognition.onspeechend = () => {};
-    }
   }
 
-  public startListening(onResult: (text: string) => void, onError?: (error: string) => void): void {
-    this.isListening = true;
-    this.noMatchCount = 0;
-    this.consecutiveRestarts = 0;
-    if (this.shouldResetText) {
-      this.accumulatedText = '';
-    }
-    this.shouldResetText = true;
-    this.manualStop = false;
-    this.config.onResult = onResult;
-    this.config.onError = onError;
-    
+  public async startListening(onResult: (text: string) => void, onError?: (error: string) => void): Promise<void> {
     try {
-      this.recognition?.start();
+      if (this.isRecording) {
+        DebugLogger.log('[Speech] Already recording, stopping current recording');
+        this.stopListening();
+      }
+
+      this.config.onResult = onResult;
+      this.config.onError = onError;
+      
+      if (!this.stream) {
+        // Request microphone access only if we don't have a stream
+        this.stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
+
+        // Setup audio analysis for silence detection
+        this.audioContext = new AudioContext();
+        this.analyser = this.audioContext.createAnalyser();
+        this.mediaStreamSource = this.audioContext.createMediaStreamSource(this.stream);
+        this.mediaStreamSource.connect(this.analyser);
+        this.analyser.fftSize = 2048;
+      }
+      
+      // Setup media recorder
+      this.mediaRecorder = new MediaRecorder(this.stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      // Only clear audioChunks if we're starting a new recording
+      if (!this.isPaused) {
+        this.audioChunks = [];
+      }
+      
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+      
+      this.mediaRecorder.onerror = (event: Event) => {
+        const error = event instanceof Error ? event : new Error('Unknown recording error');
+        DebugLogger.error('[Speech] Recording error:', error);
+        this.config.onError?.('Fout tijdens de opname');
+        this.cleanup();
+      };
+      
+      this.mediaRecorder.onstop = async () => {
+        try {
+          if (this.audioChunks.length === 0) {
+            DebugLogger.log('[Speech] No audio recorded');
+            this.config.onError?.('Geen audio opgenomen');
+            return;
+          }
+
+          const audioBlob = new Blob(this.audioChunks, { 
+            type: 'audio/webm;codecs=opus' 
+          });
+          
+          // Check minimale grootte (5KB is een betere minimum grootte voor een betekenisvolle opname)
+          if (audioBlob.size < 5 * 1024) {
+            DebugLogger.log(`[Speech] Recording too short: ${audioBlob.size} bytes`);
+            this.config.onError?.('Opname te kort, probeer opnieuw');
+            return;
+          }
+
+          await this.transcribeAudio(audioBlob);
+        } catch (error) {
+          DebugLogger.error('[Speech] Transcription error:', error);
+          this.config.onError?.(error instanceof Error ? error.message : 'Fout bij het verwerken van de spraakopname');
+        } finally {
+          this.cleanup();
+        }
+      };
+      
+      // Start recording
+      this.mediaRecorder.start(1000); // Chunk elke seconde
+      this.isRecording = true;
+      DebugLogger.log('[Speech] Started recording');
+
+      // Start silence detection
+      this.startSilenceDetection();
+
+      // Set maximum recording time
+      this.recordingInterval = setTimeout(() => {
+        if (this.isRecording) {
+          DebugLogger.log('[Speech] Maximum recording time reached');
+          this.stopListening();
+        }
+      }, this.MAX_RECORDING_TIME);
+      
     } catch (error) {
       DebugLogger.error('[Speech] Start error:', error);
-      this.config.onError?.('Fout bij starten van spraakherkenning');
-      this.isListening = false;
+      this.config.onError?.('Fout bij het starten van de spraakopname');
+      this.cleanup();
     }
   }
 
-  public stopListening(): void {
-    this.manualStop = true;
-    this.isListening = false;
-    this.shouldResetText = true;
-    this.recognition?.stop();
+  private startSilenceDetection(): void {
+    if (!this.analyser) return;
+
+    const bufferLength = this.analyser.frequencyBinCount;
+    const dataArray = new Float32Array(bufferLength);
+    let silenceStart: number | null = null;
+
+    const checkSilence = () => {
+      if (!this.isRecording || !this.analyser) return;
+
+      this.analyser.getFloatTimeDomainData(dataArray);
+      
+      // Calculate RMS value
+      let rms = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        rms += dataArray[i] * dataArray[i];
+      }
+      rms = Math.sqrt(rms / bufferLength);
+      
+      // Convert to dB
+      const db = 20 * Math.log10(rms);
+
+      // Als er spraak is, reset de silence timer
+      if (db >= this.SILENCE_THRESHOLD) {
+        silenceStart = null;
+        if (this.silenceTimeout) {
+          clearTimeout(this.silenceTimeout);
+          this.silenceTimeout = null;
+        }
+      } else if (silenceStart === null) {
+        // Start silence timer
+        silenceStart = Date.now();
+        this.silenceTimeout = setTimeout(() => {
+          DebugLogger.log('[Speech] Silence detected for 2 seconds, stopping recording');
+          this.stopListening();
+        }, this.SILENCE_DURATION);
+      }
+
+      // Continue checking while recording
+      if (this.isRecording) {
+        requestAnimationFrame(checkSilence);
+      }
+    };
+
+    requestAnimationFrame(checkSilence);
+  }
+
+  public stopListening(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.mediaRecorder || !this.isRecording) {
+        resolve();
+        return;
+      }
+
+      // Store the original callbacks
+      const originalOnResult = this.config.onResult;
+      const originalOnError = this.config.onError;
+
+      // Override callbacks to handle promise resolution
+      this.config.onResult = (text: string) => {
+        originalOnResult?.(text);
+        this.config.onResult = originalOnResult;
+        this.config.onError = originalOnError;
+        resolve();
+      };
+
+      this.config.onError = (error: string) => {
+        originalOnError?.(error);
+        this.config.onResult = originalOnResult;
+        this.config.onError = originalOnError;
+        reject(new Error(error));
+      };
+
+      // Set up onstop handler before stopping
+      this.mediaRecorder.onstop = async () => {
+        try {
+          if (this.audioChunks.length === 0) {
+            DebugLogger.log('[Speech] No audio recorded');
+            this.config.onError?.('Geen audio opgenomen');
+            return;
+          }
+
+          const audioBlob = new Blob(this.audioChunks, { 
+            type: 'audio/webm;codecs=opus' 
+          });
+          
+          // Check minimale grootte (5KB is een betere minimum grootte voor een betekenisvolle opname)
+          if (audioBlob.size < 5 * 1024) {
+            DebugLogger.log(`[Speech] Recording too short: ${audioBlob.size} bytes`);
+            this.config.onError?.('Opname te kort, probeer opnieuw');
+            return;
+          }
+
+          await this.transcribeAudio(audioBlob);
+        } catch (error) {
+          DebugLogger.error('[Speech] Transcription error:', error);
+          this.config.onError?.(error instanceof Error ? error.message : 'Fout bij het verwerken van de spraakopname');
+        } finally {
+          this.cleanup();
+        }
+      };
+
+      // Stop recording
+      this.isRecording = false; // Set this first to stop the silence detection loop
+      this.mediaRecorder.stop();
+      DebugLogger.log('[Speech] Stopped recording');
+    });
+  }
+
+  private cleanup(): void {
+    // Clear timeouts
+    if (this.recordingInterval) {
+      clearTimeout(this.recordingInterval);
+      this.recordingInterval = null;
+    }
+    if (this.silenceTimeout) {
+      clearTimeout(this.silenceTimeout);
+      this.silenceTimeout = null;
+    }
+
+    // Stop and cleanup media recorder
+    if (this.mediaRecorder) {
+      if (this.mediaRecorder.state !== 'inactive') {
+        try {
+          this.mediaRecorder.stop();
+        } catch (error) {
+          // Ignore stop errors
+        }
+      }
+    }
+
+    // Stop all tracks
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
+    }
+
+    // Cleanup audio context
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+      this.analyser = null;
+      this.mediaStreamSource = null;
+    }
+
+    // Reset state
+    this.mediaRecorder = null;
+    this.audioChunks = [];
+    this.isRecording = false;
+    this.isPaused = false;
+  }
+
+  private async transcribeAudio(audioBlob: Blob): Promise<void> {
+    try {
+      // Create form data
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'recording.webm');
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'nl');
+      
+      DebugLogger.log('[Speech] Starting transcription...');
+      
+      // Send to our API endpoint
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Transcription failed');
+      }
+      
+      const data = await response.json();
+      if (data.text) {
+        DebugLogger.log('[Speech] Transcription received');
+        // Append new text to existing text
+        this.config.onResult?.(data.text);
+      } else {
+        throw new Error('Geen tekst ontvangen van de transcriptie');
+      }
+      
+    } catch (error) {
+      DebugLogger.error('[Speech] Transcription error:', error);
+      throw error;
+    }
   }
 
   public isSupported(): boolean {
-    try {
-      const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-      DebugLogger.log('[Speech] Support check:', supported);
-      return supported;
-    } catch (error) {
-      DebugLogger.error('[Speech] Support check error:', error);
-      return false;
+    const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    DebugLogger.log('[Speech] Support check:', supported);
+    return supported;
+  }
+
+  public pauseListening(): void {
+    if (this.mediaRecorder && this.isRecording && !this.isPaused) {
+      this.isPaused = true;
+      this.isRecording = false; // Pause silence detection
+      this.mediaRecorder.pause();
+      DebugLogger.log('[Speech] Paused recording');
+    }
+  }
+
+  public resumeListening(): void {
+    if (this.mediaRecorder && this.isPaused) {
+      this.isPaused = false;
+      this.isRecording = true; // Resume silence detection
+      this.mediaRecorder.resume();
+      this.startSilenceDetection(); // Restart silence detection
+      DebugLogger.log('[Speech] Resumed recording');
     }
   }
 } 

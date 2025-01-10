@@ -22,6 +22,11 @@ export const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-[#FF4500] to-[#FF6B4A] text-transparent bg-clip-text">
+            TekstTalent
+          </h1>
+        </header>
         <main>{children}</main>
       </div>
       

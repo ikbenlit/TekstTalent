@@ -2,10 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { TransformControls } from "@/frontend/components/TransformControls/TransformControls";
 import { TransformFormat } from '@/types/api.types';
-import { Type, Image } from 'lucide-react';
-import { CopyButton } from '@/frontend/components/CopyButton/CopyButton';
 import { Layout } from '@/frontend/components/Layout/Layout';
 import { TextSection } from '@/frontend/components/TextSection/TextSection';
 import { ImageSection } from '@/frontend/components/ImageSection/ImageSection';
@@ -22,7 +19,8 @@ export default function Home() {
   const [isTransforming, setIsTransforming] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   const handleTransform = async () => {
     if (!text || isTransforming) return;
@@ -41,7 +39,6 @@ export default function Home() {
       setTransformedText(data.transformedText);
     } catch (error) {
       console.error('Transform error:', error);
-      setError('Failed to transform text');
     } finally {
       setIsTransforming(false);
     }
@@ -50,17 +47,14 @@ export default function Home() {
   const handleGenerateImage = async () => {
     if (!text || isGeneratingImage) return;
     setIsGeneratingImage(true);
-    setError(null);
     
     try {
-      console.log('Starting image generation...');
       const response = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
 
-      console.log('Image generation response status:', response.status);
       const data = await response.json();
       
       if (!response.ok) {
@@ -71,11 +65,9 @@ export default function Home() {
         throw new Error('No image URL received');
       }
 
-      console.log('Image URL received:', data.imageUrl);
       setImageUrl(data.imageUrl);
     } catch (error: any) {
       console.error('Image generation error:', error);
-      setError(error.message || 'Failed to generate image');
       setImageUrl(null);
     } finally {
       setIsGeneratingImage(false);
@@ -86,7 +78,13 @@ export default function Home() {
     <Layout>
       <div className="space-y-4">
         <div className="flex flex-col items-center gap-4 mb-4">
-          <SpeechInput onTextChange={setText} />
+          <SpeechInput 
+            onTextChange={setText} 
+            onTranscribeStart={() => setIsTranscribing(true)}
+            onTranscribeEnd={() => setIsTranscribing(false)}
+            onRecordingStart={() => setIsRecording(true)}
+            onRecordingEnd={() => setIsRecording(false)}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
@@ -101,6 +99,8 @@ export default function Home() {
             onFormatChange={setFormat}
             onGenerateImage={handleGenerateImage}
             isGeneratingImage={isGeneratingImage}
+            isTranscribing={isTranscribing}
+            isRecording={isRecording}
           />
           <ImageSection 
             imageUrl={imageUrl} 
