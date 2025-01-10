@@ -57,22 +57,23 @@ export class SpeechRecognitionService {
 
       this.recognition.onend = () => {
         console.debug('[Speech] Recognition ended');
-        this.isListening = false;
 
-        // Alleen herstarten als we nog steeds willen luisteren en niet te vaak no-matches hebben gehad
-        if (this.deviceDetection.getDeviceType() === 'mobile' && 
+        // Alleen stoppen met luisteren als we te veel no-matches hebben of handmatig stoppen
+        if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
+          console.debug('[Speech] Stopping due to too many no-matches');
+          this.isListening = false;
+          this.config.onError?.('Geen spraak gedetecteerd');
+          this.shouldResetText = true; // Reset tekst bij volgende start
+        } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
             this.deviceDetection.getBrowserType() === 'chrome' &&
-            this.isListening &&
-            this.noMatchCount < this.MAX_NO_MATCH_RETRIES) {
+            this.isListening) {
           console.debug('[Speech] Auto-restarting for mobile Chrome');
           this.shouldResetText = false; // Behoud tekst voor volgende sessie
           setTimeout(() => {
             this.recognition?.start();
           }, 100); // Kleine vertraging om de browser tijd te geven
-        } else if (this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
-          console.debug('[Speech] Stopping due to too many no-matches');
-          this.config.onError?.('Geen spraak gedetecteerd');
-          this.shouldResetText = true; // Reset tekst bij volgende start
+        } else {
+          this.isListening = false;
         }
       };
       
