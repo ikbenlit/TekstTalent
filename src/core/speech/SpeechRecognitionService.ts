@@ -60,7 +60,7 @@ export class SpeechRecognitionService {
       this.recognition.onend = () => {
         console.debug('[Speech] Recognition ended');
 
-        // Alleen stoppen als het handmatig is of bij te veel no-matches
+        // Alleen stoppen bij handmatige stop of te veel no-matches
         if (this.manualStop || this.noMatchCount >= this.MAX_NO_MATCH_RETRIES) {
           console.debug('[Speech] Stopping due to manual stop or too many no-matches');
           this.isListening = false;
@@ -69,17 +69,16 @@ export class SpeechRecognitionService {
           }
           this.shouldResetText = true;
         } else if (this.deviceDetection.getDeviceType() === 'mobile' && 
-            this.deviceDetection.getBrowserType() === 'chrome' &&
-            this.isListening) {
+            this.deviceDetection.getBrowserType() === 'chrome') {
+          // Altijd herstarten als we niet handmatig gestopt zijn
           console.debug('[Speech] Auto-restarting for mobile Chrome');
           this.shouldResetText = false;
+          this.noMatchCount = 0; // Reset no-match teller bij herstart
           setTimeout(() => {
             if (!this.manualStop) {
               this.recognition?.start();
             }
           }, 100);
-        } else {
-          this.isListening = false;
         }
       };
       
@@ -145,16 +144,25 @@ export class SpeechRecognitionService {
 
       this.recognition.onnomatch = () => {
         console.debug('[Speech] No match found');
-        this.noMatchCount++;
+        // Alleen verhogen als we geen actieve spraak hebben
+        if (!this.isListening) {
+          this.noMatchCount++;
+        }
       };
 
-      // Verwijder de speechend handler, we willen niet automatisch stoppen
+      // Verwijder speechend/soundend handlers om automatische stop te voorkomen
       this.recognition.onaudiostart = () => {
         console.debug('[Speech] Audio started');
       };
 
       this.recognition.onaudioend = () => {
         console.debug('[Speech] Audio ended');
+        // Direct herstarten bij audio end als we niet handmatig gestopt zijn
+        if (!this.manualStop && this.isListening) {
+          setTimeout(() => {
+            this.recognition?.start();
+          }, 100);
+        }
       };
 
       this.recognition.onsoundstart = () => {
@@ -171,6 +179,7 @@ export class SpeechRecognitionService {
 
       this.recognition.onspeechend = () => {
         console.debug('[Speech] Speech ended');
+        // Negeer speech end events tenzij we handmatig gestopt zijn
       };
     }
   }
