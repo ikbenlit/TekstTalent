@@ -64,14 +64,14 @@ export const defaultConfig: SpeechConfig = {
 export const mobileConfig: Partial<SpeechConfig> = {
   continuous: false,
   interimResults: true,
-  maxDuration: 10000,
-  restartDelay: 300,
-  maxRetries: 2,
-  silenceTimeout: 1500,
+  maxDuration: 15000,
+  restartDelay: 1000,
+  maxRetries: 3,
+  silenceTimeout: 2000,
   silenceThreshold: 500,
   silenceActions: {
     stopOnSilence: true,
-    restartOnSilence: true
+    restartOnSilence: false
   }
 };
 

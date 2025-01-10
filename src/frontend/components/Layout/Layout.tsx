@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { Inter } from 'next/font/google';
+import { DebugLog } from '../DebugLog/DebugLog';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -51,6 +52,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </footer>
       </div>
+      {process.env.NODE_ENV !== 'production' && <DebugLog />}
     </div>
   );
 }; 

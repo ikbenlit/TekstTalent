@@ -59,12 +59,14 @@ export class SpeechRecognitionService {
   private setupRecognition(): void {
     if (!this.recognition) return;
 
-    // Log config bij setup
-    console.debug('Setting up recognition with config:', {
+    console.debug('Mobile Setup:', {
       isMobile: this.deviceDetectionService.isMobile(),
-      continuous: this.config.continuous,
-      interimResults: this.config.interimResults,
-      lang: this.config.lang
+      browser: this.deviceDetectionService.getBrowserInfo(),
+      config: {
+        continuous: this.config.continuous,
+        interimResults: this.config.interimResults,
+        lang: this.config.lang
+      }
     });
 
     this.recognition.continuous = this.config.continuous;
@@ -72,13 +74,13 @@ export class SpeechRecognitionService {
     this.recognition.lang = this.config.lang;
 
     this.recognition.onstart = () => {
-      console.debug('Recognition started, continuous:', this.recognition?.continuous);
+      console.debug('Recognition started on mobile');
       this.setState('LISTENING');
       this.config.onSpeechStart?.();
     };
 
     this.recognition.onend = () => {
-      console.debug('Recognition ended, state:', this.state);
+      console.debug('Recognition ended on mobile');
       const wasListening = this.state === 'LISTENING';
       this.setState('IDLE');
       
@@ -121,10 +123,10 @@ export class SpeechRecognitionService {
 
     // Log errors met meer context
     this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.debug('Speech error:', {
+      console.error('Mobile Speech Error:', {
         error: event.error,
         message: event.message,
-        isMobile: this.deviceDetectionService.isMobile()
+        state: this.state
       });
       this.handleError(event);
     };
