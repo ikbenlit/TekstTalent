@@ -1,27 +1,10 @@
 import { OpenAI } from 'openai';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { mkdir } from 'fs/promises';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-const TEMP_DIR = join(process.cwd(), 'tmp');
-
-// Zorg dat de temp directory bestaat
-async function ensureTempDir() {
-  try {
-    await mkdir(TEMP_DIR, { recursive: true });
-  } catch (error) {
-    console.error('Failed to create temp directory:', error);
-    throw new Error('Server configuration error');
-  }
-}
-
 export async function POST(request: Request) {
-  let tempFilePath = '';
-
   try {
     const formData = await request.formData();
     const audioFile = formData.get('file') as Blob;
@@ -49,15 +32,12 @@ export async function POST(request: Request) {
       );
     }
 
-    await ensureTempDir();
-
-    // Create a temporary file with unique name
+    // Convert Blob to File object that OpenAI can handle
     const buffer = Buffer.from(await audioFile.arrayBuffer());
-    tempFilePath = join(TEMP_DIR, `recording-${Date.now()}-${Math.random().toString(36).slice(2)}.webm`);
-    await writeFile(tempFilePath, buffer);
+    const file = new File([buffer], 'audio.webm', { type: audioFile.type });
 
     const response = await openai.audio.transcriptions.create({
-      file: await import('fs').then(fs => fs.createReadStream(tempFilePath)),
+      file: file,
       model: 'whisper-1',
       language: 'nl',
       response_format: 'json'
@@ -90,14 +70,5 @@ export async function POST(request: Request) {
       { error: message },
       { status }
     );
-  } finally {
-    // Clean up temp file
-    if (tempFilePath) {
-      try {
-        await unlink(tempFilePath);
-      } catch (error) {
-        console.error('Failed to clean up temp file:', error);
-      }
-    }
   }
 } 
